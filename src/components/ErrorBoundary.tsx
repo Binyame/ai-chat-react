@@ -13,7 +13,7 @@ import {
   ErrorOutline as ErrorIcon,
   Refresh as RefreshIcon,
   ExpandMore as ExpandIcon,
-  Bug as BugIcon
+  BugReport as BugIcon
 } from '@mui/icons-material';
 
 interface Props {

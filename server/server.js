@@ -113,10 +113,10 @@ app.post('/api/openai/chat', async (req, res) => {
   }
 });
 
-// Hugging Face API proxy
+// Hugging Face API proxy with multiple fallback strategies
 app.post('/api/huggingface/chat', async (req, res) => {
   try {
-    const { input, model = 'microsoft/DialoGPT-medium' } = req.body;
+    const { input } = req.body;
 
     if (!process.env.HUGGINGFACE_TOKEN) {
       return res.status(500).json({
@@ -132,50 +132,109 @@ app.post('/api/huggingface/chat', async (req, res) => {
       });
     }
 
-    const response = await axios.post(
-      `https://api-inference.huggingface.co/models/${model}`,
-      { inputs: input },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.HUGGINGFACE_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
+    // Try multiple working models as fallbacks
+    const models = [
+      'facebook/blenderbot-400M-distill',
+      'microsoft/DialoGPT-small', 
+      'gpt2',
+      'distilgpt2'
+    ];
 
-    let assistantMessage = 'No response generated';
-    
-    if (Array.isArray(response.data) && response.data.length > 0) {
-      assistantMessage = response.data[0].generated_text || response.data[0].summary_text || assistantMessage;
-    } else if (response.data.generated_text) {
-      assistantMessage = response.data.generated_text;
+    let lastError = null;
+
+    for (const model of models) {
+      try {
+        console.log(`Trying model: ${model}`);
+        
+        const response = await axios.post(
+          `https://api-inference.huggingface.co/models/${model}`,
+          { 
+            inputs: input,
+            parameters: {
+              max_length: 100,
+              temperature: 0.7,
+              do_sample: true
+            }
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.HUGGINGFACE_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
+          }
+        );
+
+        let assistantMessage = 'No response generated';
+        
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          const result = response.data[0];
+          assistantMessage = result.generated_text || result.summary_text || result.translation_text || assistantMessage;
+          
+          // Clean up the response (remove input echo for GPT models)
+          if (assistantMessage.startsWith(input)) {
+            assistantMessage = assistantMessage.substring(input.length).trim();
+          }
+        } else if (response.data.generated_text) {
+          assistantMessage = response.data.generated_text;
+        }
+
+        // If we get here, the request succeeded
+        console.log(`✅ Success with model: ${model}`);
+        return res.json({
+          success: true,
+          data: assistantMessage || 'I received your message but had trouble generating a response.',
+          model: model
+        });
+
+      } catch (modelError) {
+        lastError = modelError;
+        console.log(`❌ Model ${model} failed:`, modelError.response?.status || modelError.message);
+        
+        // If it's a 503, the model might just be loading
+        if (modelError.response?.status === 503) {
+          console.log(`Model ${model} is loading, continuing to next model...`);
+          continue;
+        }
+        
+        // For other errors, also continue to next model
+        continue;
+      }
     }
 
-    res.json({
-      success: true,
-      data: assistantMessage
+    // If we get here, all models failed
+    console.error('All Hugging Face models failed. Last error:', lastError?.response?.data || lastError?.message);
+    
+    // Provide helpful error message based on the last error
+    if (lastError?.response) {
+      const status = lastError.response.status;
+      
+      if (status === 401 || status === 403) {
+        return res.status(500).json({
+          success: false,
+          error: 'Hugging Face API authentication failed. Please check your token permissions.'
+        });
+      } else if (status === 404) {
+        return res.status(500).json({
+          success: false,
+          error: 'Hugging Face models not accessible. Your account may not have Inference API access.'
+        });
+      } else if (status === 503) {
+        return res.status(503).json({
+          success: false,
+          error: 'All Hugging Face models are currently loading. Please try again in 1-2 minutes.'
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Unable to connect to Hugging Face Inference API. This may be due to account limitations or API changes.'
     });
 
   } catch (error) {
-    console.error('Hugging Face API Error:', error.response?.data || error.message);
+    console.error('Hugging Face API Proxy Error:', error.message);
     
-    if (error.response) {
-      const status = error.response.status;
-      
-      if (status === 503) {
-        return res.status(503).json({
-          success: false,
-          error: 'Model is currently loading. Please try again in a few moments.'
-        });
-      } else if (status === 401 || status === 403) {
-        return res.status(500).json({
-          success: false,
-          error: 'Invalid Hugging Face token configuration'
-        });
-      }
-    }
-
     res.status(500).json({
       success: false,
       error: 'Failed to communicate with Hugging Face API'

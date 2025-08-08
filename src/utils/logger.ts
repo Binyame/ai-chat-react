@@ -231,7 +231,7 @@ export class PerformanceLogger {
         return result;
       }
     } catch (error) {
-      this.end(operation, { ...data, error });
+      this.end(operation, data ? { ...data as Record<string, unknown>, error } : { error });
       throw error;
     }
   }

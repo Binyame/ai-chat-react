@@ -12,6 +12,18 @@ dist
 dist-ssr
 *.local
 
+# 🔒 CRITICAL: Environment Variables - Never commit API keys!
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# Production environment files
+.env.production
+.env.staging
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +34,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Additional security
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Test and temporary files
+test-*.js
+*test*.js
+*.tmp
+*.temp
+debug-*.js

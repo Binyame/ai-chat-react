@@ -9,8 +9,8 @@ import {
   Alert,
   Link
 } from '@mui/material';
-import axios from 'axios';
 import { Message } from '../types';
+import { sendMessageToHuggingFace, checkBackendHealth } from '../services/apiService';
 
 const HuggingFaceChatComponent: React.FC = () => {
   const [input, setInput] = useState('');
@@ -28,82 +28,49 @@ const HuggingFaceChatComponent: React.FC = () => {
     message: ''
   });
 
-  // Create Axios instance with default configuration
-  const huggingfaceAxios = axios.create({
-    baseURL: 'https://api-inference.huggingface.co',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_HUGGINGFACE_TOKEN}`
-    }
-  });
-
-  // Test connection to Hugging Face API on mount
+  // Test backend connection on mount
   useEffect(() => {
-    const testConnection = async () => {
+    const testBackendConnection = async () => {
       setConnectionStatus({
         tested: false,
         success: false,
-        message: 'Testing connection to Hugging Face API...'
+        message: 'Testing connection to backend server...'
       });
       
       try {
-        // Try a simple request to a public model - using gpt2 which is simpler
-        const response = await huggingfaceAxios.post('/models/gpt2', {
-          inputs: "Hello world"
-        });
+        const healthCheck = await checkBackendHealth();
         
-        setConnectionStatus({
-          tested: true,
-          success: true,
-          message: 'Connected to Hugging Face API successfully!'
-        });
-
-        console.log('Connection test response:', response.data);
-      } catch (err) {
-        let errorMessage = 'Unknown connection error';
-        let details: Record<string, unknown> = {};
-        
-        if (axios.isAxiosError(err)) {
-          if (err.response) {
-            errorMessage = `Connection error: API error: ${err.response.status}`;
-            details = {
-              status: err.response.status,
-              statusText: err.response.statusText,
-              data: err.response.data,
-              headers: err.response.headers
-            };
-            
-            // Special handling for common errors
-            if (err.response.status === 403) {
-              errorMessage = 'API Key error: Please check your Hugging Face token (403 Forbidden)';
-            } else if (err.response.status === 400) {
-              errorMessage = 'Bad Request: The API request format is incorrect (400 Bad Request)';
-            }
-          } else if (err.request) {
-            errorMessage = 'No response from server. Please check your internet connection.';
-            details = { request: err.request };
-          } else {
-            errorMessage = `Error: ${err.message}`;
-          }
-        } else if (err instanceof Error) {
-          errorMessage = err.message;
+        if (healthCheck.success) {
+          // Test a simple Hugging Face API call through backend
+          const testResponse = await sendMessageToHuggingFace("Hello");
+          
+          setConnectionStatus({
+            tested: true,
+            success: testResponse.success,
+            message: testResponse.success 
+              ? 'Connected to Hugging Face API via backend successfully!' 
+              : `Backend connected, but Hugging Face API error: ${testResponse.error}`
+          });
+        } else {
+          setConnectionStatus({
+            tested: true,
+            success: false,
+            message: `Backend connection failed: ${healthCheck.error || 'Unknown error'}`
+          });
         }
-        
+      } catch (error) {
         setConnectionStatus({
           tested: true,
           success: false,
-          message: errorMessage,
-          details
+          message: `Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
         });
         
-        // Log detailed error for debugging
-        console.error('Hugging Face API Connection Error:', err);
-        console.error('Error Details:', details);
+        console.error('Backend connection test error:', error);
       }
     };
     
-    testConnection();
-  }, [huggingfaceAxios]);
+    testBackendConnection();
+  }, []);
 
   const sendMessage = async (message: string) => {
     if (!message.trim()) return;
@@ -118,46 +85,24 @@ const HuggingFaceChatComponent: React.FC = () => {
     setChatLog(prev => [...prev, { role: 'user', content: message }]);
 
     try {
-      // Use the simpler gpt2 model with direct message input
-      const response = await huggingfaceAxios.post('/models/gpt2', {
-        inputs: message // Just send the message directly, not a complex prompt
-      });
+      // Use the backend API service
+      const response = await sendMessageToHuggingFace(message);
 
-      console.log('Response from Hugging Face:', response.data);
+      console.log('Response from backend:', response);
       
-      // Extract the assistant's response - adjust based on the actual response format
-      // GPT-2 usually returns an object with generated_text
-      const assistantMessage = response.data[0]?.generated_text || "I couldn't generate a response.";
-      
-      // Update chat log with the assistant's response
-      setChatLog(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
-    } catch (err) {
-      // Handle errors
-      let errorMessage = 'An error occurred. Please try again later.';
-      
-      if (axios.isAxiosError(err)) {
-        if (err.response) {
-          // The request was made and the server responded with a status code
-          // that falls out of the range of 2xx
-          if (err.response.status === 403) {
-            errorMessage = 'API Key error: Please check your Hugging Face token (403 Forbidden)';
-          } else if (err.response.status === 400) {
-            errorMessage = 'Bad Request: The API request format is incorrect (400 Bad Request)';
-            console.error('Request that caused 400:', { inputs: message });
-          } else {
-            errorMessage = `Error ${err.response.status}: ${err.response.statusText}`;
-          }
-          console.error('API Response Error:', err.response.data);
-        } else if (err.request) {
-          // The request was made but no response was received
-          errorMessage = 'No response from server. Please check your internet connection.';
-          console.error('No Response Error:', err.request);
-        } else {
-          // Something happened in setting up the request that triggered an Error
-          errorMessage = `Error: ${err.message}`;
-          console.error('Request Setup Error:', err.message);
-        }
+      if (response.success) {
+        // Update chat log with the assistant's response
+        setChatLog(prev => [...prev, { role: 'assistant', content: response.data || "I couldn't generate a response." }]);
+      } else {
+        // Handle API error
+        const errorMessage = response.error || 'An error occurred. Please try again later.';
+        setError(errorMessage);
+        setChatLog(prev => [...prev, { role: 'assistant', content: `Error: ${errorMessage}` }]);
       }
+    } catch (err) {
+      // Handle network/connection errors
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please try again later.';
+      console.error('Network/Connection Error:', err);
       
       // Add error message to chat
       setChatLog(prev => [...prev, { 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  TextField, 
-  Paper, 
-  Button, 
-  CircularProgress, 
-  Typography, 
+import {
+  Box,
+  TextField,
+  Paper,
+  Button,
+  CircularProgress,
+  Typography,
   Alert,
   Link as MuiLink
 } from '@mui/material';
@@ -264,7 +264,7 @@ const GeminiChatComponent: React.FC = () => {
             <Typography variant="body2" sx={{ mt: 1 }}>
               You can get a free API key from{' '}
               <MuiLink 
-                href="https://makersuite.google.com/app/apikey" 
+                href="https://makersuite.google.com/app/apikey"
                 target="_blank" 
                 rel="noopener"
               >
