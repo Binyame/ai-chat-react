@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { 
   Box, 
   Typography, 
@@ -8,9 +8,11 @@ import {
   Toolbar,
   ThemeProvider,
   createTheme,
-  IconButton
+  IconButton,
+  useMediaQuery,
+  CssBaseline
 } from '@mui/material'
-import { History as HistoryIcon } from '@mui/icons-material'
+import { History as HistoryIcon, Brightness4, Brightness7 } from '@mui/icons-material'
 import { ChatProvider } from './contexts/ChatContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import SessionManager from './components/SessionManager'
@@ -19,21 +21,32 @@ import MockChatComponent from './components/MockChatComponent'
 import HuggingFaceChatComponent from './components/HuggingFaceChatComponent'
 import GeminiChatComponent from './components/GeminiChatComponent'
 
-// Create a theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-});
-
 function App() {
   const [activeTab, setActiveTab] = useState(0);
   const [sessionManagerOpen, setSessionManagerOpen] = useState(false);
+  
+  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
+  const [darkMode, setDarkMode] = useState(prefersDarkMode);
+
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: darkMode ? 'dark' : 'light',
+          primary: {
+            main: darkMode ? '#90caf9' : '#1976d2',
+          },
+          secondary: {
+            main: darkMode ? '#f48fb1' : '#dc004e',
+          },
+          background: {
+            default: darkMode ? '#121212' : '#ffffff',
+            paper: darkMode ? '#1e1e1e' : '#ffffff',
+          },
+        },
+      }),
+    [darkMode]
+  );
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -43,6 +56,7 @@ function App() {
     <ErrorBoundary>
       <ChatProvider>
         <ThemeProvider theme={theme}>
+          <CssBaseline />
           <Box sx={{ 
             display: 'flex', 
             flexDirection: 'column', 
@@ -62,6 +76,13 @@ function App() {
               <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                 AI Chat Application
               </Typography>
+              <IconButton
+                color="inherit"
+                onClick={() => setDarkMode(!darkMode)}
+                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {darkMode ? <Brightness7 /> : <Brightness4 />}
+              </IconButton>
             </Toolbar>
           </AppBar>
           
