@@ -1,221 +1,198 @@
-# 🤖 AI Chat with RAG Pipeline
+# AI Chat with RAG Pipeline
 
-> **Chat with AI. Upload PDFs. Get answers with citations.**
-
-A production-ready React application featuring **Retrieval-Augmented Generation (RAG)** - upload PDFs and receive AI-generated answers with source citations. Built with React, TypeScript, LangChain.js, Pinecone, and OpenAI.
+A React application that demonstrates retrieval-augmented generation (RAG) for document Q&A. Upload PDFs, ask questions, and get AI-generated answers with source citations.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![LangChain](https://img.shields.io/badge/🦜_LangChain-121212?style=flat)](https://js.langchain.com/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
 
-> **⚠️ SECURITY**: Never commit `.env` files! Use `.env.example` for documentation.
+---
+
+## Technical Overview
+
+**The core problem:** When using LLMs to answer questions about user documents, you need to retrieve relevant context without exceeding token limits or losing semantic meaning across page boundaries.
+
+**My approach:**
+
+1. **Document Chunking Strategy** - Used LangChain's `RecursiveCharacterTextSplitter` with 1000-character chunks and 200-character overlap. The overlap preserves context across boundaries; after testing various sizes, 1000 chars balanced semantic completeness with embedding efficiency.
+
+2. **Embedding Dimensions Trade-off** - Initially tried OpenAI's 1536-dim embeddings but switched to 768-dim (`text-embedding-3-small`) to reduce Pinecone storage costs by 50% with minimal accuracy loss. For most document Q&A, the semantic capture is nearly identical.
+
+3. **Vector Database Choice** - Chose Pinecone over self-hosted Weaviate/Chroma for two reasons: (a) serverless scaling eliminates cold-start issues during demos, (b) namespace isolation lets users maintain separate document collections without cross-contamination.
+
+4. **Backend Proxy Pattern** - All AI provider calls route through an Express backend. This wasn't just for API key security—it enabled request logging, rate limiting, and the ability to swap providers without frontend changes. The abstraction cost is one extra network hop (~20ms) but the operational flexibility is worth it.
+
+5. **LLM Provider Flexibility** - Integrated OpenAI, Gemini, and Hugging Face with a common interface. Initially tried using Gemini embeddings for cost savings, but LangChain's v2.1.20 didn't support their embedding API properly (404 errors), so I stuck with OpenAI embeddings and used Gemini only for chat completions where it worked reliably.
+
+**What I'd do differently at scale:**
+- Implement semantic caching to avoid re-embedding identical documents
+- Add BM25 hybrid search alongside vector similarity (catches keyword matches vectors miss)
+- Use streaming responses for better UX on slower models
 
 ---
 
-## ✨ What Makes This Special?
+## Architecture Decisions
 
-🎯 **RAG Pipeline** - Upload PDFs and ask questions with cited answers
-🤖 **Multi-AI Support** - OpenAI, Google Gemini, Hugging Face
-🔐 **Secure Architecture** - Backend proxy, no exposed API keys
-📚 **Smart Search** - Vector embeddings + semantic matching
-💾 **Session Management** - Save, export, and resume conversations
-🎨 **Modern UI** - Material-UI with dark mode support
+### State Management
+Chose React Context over Redux because the state graph is simple (current session + chat history). Context re-renders are optimized with `useMemo` on selectors. For a multi-tenant version, I'd switch to Zustand for better dev tools and middleware support.
 
-## 🚀 Features
+### Error Boundaries
+Implemented granular error boundaries around the RAG upload component specifically—PDF parsing can fail unpredictably with malformed files. Rather than crashing the whole app, failed uploads show inline errors while keeping the chat functional.
 
-### Core Features
-- **Multiple AI Providers**: OpenAI GPT, Hugging Face, Google Gemini, and Mock AI
-- **RAG Pipeline**: Upload PDFs and get AI answers with citations using LangChain.js + Pinecone
-- **Persistent Chat History**: Automatic localStorage backup with session management
-- **Secure API Handling**: Backend proxy eliminates frontend API key exposure
-- **Session Management**: Save, load, export, and import chat conversations
-- **Real-time Error Handling**: Comprehensive error boundaries and user feedback
-- **Professional UI**: Material-UI components with responsive design
+### Storage Strategy
+Chat sessions persist to localStorage with a TTL-based eviction policy (oldest first when storage fills). Considered IndexedDB for larger storage, but localStorage's synchronous API simplified the codebase and 10MB is sufficient for ~1000 messages.
 
-### Security & Performance
-- **🔐 Secure**: API keys stored safely on backend server
-- **⚡ Fast**: Context-based state management with optimized re-renders
-- **🛡️ Robust**: Error boundaries, proper logging, and graceful degradation
-- **📱 Responsive**: Mobile-friendly interface with touch support
+---
 
-## 📋 Prerequisites
+## Tech Stack
 
-- **Node.js** (version 18 or higher)
-- **npm** or **yarn** package manager
-- API keys for desired providers (optional, can use Mock AI)
+**Frontend:**
+- React 18 + TypeScript (strict mode)
+- Material-UI for component library
+- Vite for build tooling
 
-## 🛠️ Installation & Setup
+**Backend:**
+- Node.js + Express
+- LangChain.js for RAG orchestration
+- Pinecone vector database (768-dim cosine similarity)
+- pdf-parse v1.1.1 for text extraction
 
-### 1. Clone and Install Frontend
+**AI Models:**
+- OpenAI `gpt-3.5-turbo` for answer generation
+- OpenAI `text-embedding-3-small` for vector embeddings (768 dims)
+- Google Gemini as alternate LLM provider
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- API keys: OpenAI (required for RAG), Pinecone (required for RAG)
+- Optional: Gemini, Hugging Face for additional chat providers
+
+### Quick Start
 
 ```bash
+# Clone and install
 git clone <your-repo-url>
 cd ai-chat-react
 npm install
-```
 
-### 2. Setup Backend Server
-
-```bash
+# Setup backend
 cd server
 npm install
-```
-
-### 3. Configure Environment Variables
-
-**Backend Configuration:**
-```bash
-cd server
 cp .env.example .env
-# Edit .env with your API keys
+# Edit server/.env with your API keys
 ```
 
-**Frontend Configuration:**
-```bash
-cd .. # Back to root directory
-cp .env.example .env.local
-# Edit .env.local if needed (backend URL is auto-configured)
-```
-
-**Required Backend Environment Variables:**
+**Required environment variables (server/.env):**
 ```env
-# API Keys (add the ones you want to use)
-OPENAI_API_KEY=your_openai_api_key_here
-HUGGINGFACE_TOKEN=your_huggingface_token_here
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Pinecone (Required for RAG functionality)
-PINECONE_API_KEY=your_pinecone_api_key_here
+OPENAI_API_KEY=sk-...
+PINECONE_API_KEY=pcsk_...
 PINECONE_INDEX_NAME=ai-chat-rag
-
-# Server Configuration
 PORT=3001
-NODE_ENV=development
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
-### 4. Get API Keys (Optional)
+**Create Pinecone index:**
+- Name: `ai-chat-rag`
+- Dimensions: `768`
+- Metric: `cosine`
 
-- **OpenAI**: [Get API key](https://platform.openai.com/api-keys)
-- **Hugging Face**: [Get token](https://huggingface.co/settings/tokens)
-- **Google Gemini**: [Get API key](https://makersuite.google.com/app/apikey)
-- **Pinecone** (for RAG): [Get API key](https://www.pinecone.io/) and create an index
+### Run the app
 
-> **Note**: You can start immediately with the Mock AI provider - no API keys required!
-
-### 5. RAG Pipeline Setup (Optional)
-
-To use the RAG feature with PDF documents:
-
-1. **Get Pinecone API Key**: Sign up at [Pinecone](https://www.pinecone.io/)
-2. **Create Pinecone Index**:
-   - Name: `ai-chat-rag`
-   - Dimensions: `1536` (for OpenAI embeddings)
-   - Metric: `cosine`
-3. **Add to `.env`**:
-   ```env
-   PINECONE_API_KEY=your_pinecone_api_key
-   PINECONE_INDEX_NAME=ai-chat-rag
-   ```
-
-📖 **See [RAG_SETUP.md](RAG_SETUP.md) for detailed RAG setup and usage guide**
-
-## 🚀 Running the Application
-
-### Development Mode
-
-**Terminal 1 - Backend Server:**
 ```bash
+# Terminal 1 - Backend
 cd server
 npm run dev
-# Server runs on http://localhost:3001
+
+# Terminal 2 - Frontend
+npm run dev
+# Open http://localhost:5173
 ```
 
-**Terminal 2 - Frontend App:**
-```bash
-npm run dev  
-# App runs on http://localhost:5173
-```
+---
 
-### Production Build
+## RAG Pipeline Usage
 
-**Build Frontend:**
-```bash
-npm run build
-npm run preview
-```
+1. Click the "RAG with PDFs" tab
+2. Upload a PDF (parsed with pdf-parse, chunked automatically)
+3. Ask questions about the content
+4. Answers include `[1]`, `[2]` citations linking to source chunks
 
-**Run Backend:**
-```bash
-cd server
-npm start
-```
+**How it works:**
+- PDF text → RecursiveCharacterTextSplitter (1000 chars, 200 overlap)
+- Chunks → OpenAI embeddings (768-dim vectors)
+- Vectors stored in Pinecone with file metadata
+- Query → similarity search (top-4 chunks) → LLM with context → cited answer
 
-## 📖 Usage Guide
+---
 
-### Getting Started
-1. **Launch the app** - Open http://localhost:5173
-2. **Choose Provider** - Click tabs to switch between AI providers
-3. **Start Chatting** - Type a message and press Enter or click Send
-
-### Using RAG with PDFs
-1. **Select RAG Tab** - Click "RAG with PDFs" tab
-2. **Upload PDF** - Click "Upload PDF" and select a document
-3. **Ask Questions** - Get AI answers with citations to your documents
-4. **View Citations** - See source references with page numbers
-
-📖 **Full RAG Guide**: See [RAG_SETUP.md](RAG_SETUP.md) for complete documentation
-
-### Session Management
-1. **Access Sessions** - Click the history icon (📚) in the top-left
-2. **Create Session** - Click "New Session" and choose provider
-3. **Save Sessions** - Sessions auto-save as you chat
-4. **Load Previous** - Click any session in the sidebar to resume
-5. **Export/Import** - Use the menu (⋮) to backup your chat history
-
-## 🏗️ Architecture Overview
+## Project Structure
 
 ```
 ai-chat-react/
 ├── src/
-│   ├── components/          # React components
-│   ├── contexts/           # React Context for state
-│   ├── services/           # API services
-│   ├── utils/              # Utilities & helpers
-│   ├── types/              # TypeScript types
-│   └── styles/             # CSS and styling
-└── server/                 # Express backend
-    ├── server.js           # Main server file
-    └── package.json        # Backend dependencies
+│   ├── components/         # UI components
+│   │   ├── ChatInterface.tsx
+│   │   ├── RAGChatComponent.tsx  # PDF upload + RAG query UI
+│   │   └── ErrorBoundary.tsx     # Granular error handling
+│   ├── contexts/          # React Context (ChatContext)
+│   ├── services/          # API clients (OpenAI, Gemini, HF)
+│   └── utils/            # Logging, storage helpers
+└── server/
+    ├── server.js         # Express API + proxy
+    └── services/
+        └── ragService.js  # LangChain RAG pipeline (functional style)
 ```
 
-## 🔧 Configuration
+---
 
-### Frontend Environment Variables
-```env
-VITE_API_BASE_URL=http://localhost:3001/api  # Backend URL
-```
+## Development Notes
 
-## 🚨 Troubleshooting
+### Code Style
+- Functional components with hooks (no class components except ErrorBoundary—React requires it)
+- Closure-based modules over classes for services (ragService.js, logger.ts)
+- Strict TypeScript with explicit return types on public APIs
 
-### Common Issues
+### Performance Considerations
+- PDF chunking happens server-side to avoid blocking the UI thread
+- Embeddings are created in batches (LangChain handles this internally)
+- Vector search returns top-4 chunks as a balance between context completeness and token usage
 
-**Backend Connection Failed:**
-```bash
-# Check backend is running
-curl http://localhost:3001/health
-```
+### Known Limitations
+- PDF parsing doesn't handle scanned documents (no OCR)
+- No streaming responses yet (LangChain supports it, just not wired up)
+- Single-user design (no auth or multi-tenancy)
 
-**API Key Issues:**
-- Verify API keys in `server/.env`
-- Try Mock AI first to verify app functionality
+---
 
-**RAG/PDF Upload Issues:**
-- See [RAG_SETUP.md](RAG_SETUP.md) for detailed troubleshooting
-- Ensure Pinecone index is created with correct dimensions (768 for Gemini)
-- Check that `pdf-parse@1.1.1` is installed (not v2)
+## Troubleshooting
 
-## 📄 License
+**"Vector dimension 0 does not match index 768"**
+- This means embeddings failed. Check `OPENAI_API_KEY` is valid in `server/.env`
 
-MIT License - feel free to use this project for personal or commercial purposes.
+**PDF upload stuck at "Processing..."**
+- Check server logs. Usually means pdf-parse v2 is installed (incompatible). Downgrade: `npm install pdf-parse@1.1.1`
+
+**Backend connection errors**
+- Verify backend is running: `curl http://localhost:3001/health`
+- Check `VITE_API_BASE_URL` in frontend `.env.local` points to `http://localhost:3001/api`
+
+---
+
+## Security Notes
+
+- API keys live in `server/.env` only (never committed to git)
+- Backend proxy pattern prevents client-side key exposure
+- `.gitignore` configured to block `.env` files and sensitive docs
+- CORS restricted to allowed origins (configured in server/.env)
+
+**⚠️ Never commit `.env` files.** Use `.env.example` for documentation.
+
+---
+
+## License
+
+MIT License - free to use for personal or commercial projects.
