@@ -106,9 +106,10 @@ export const sendMessageToGemini = async (message: string): Promise<ApiResponse>
 // Health check for backend connectivity
 export const checkBackendHealth = async (): Promise<ApiResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`);
+    const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://localhost:3001';
+    const response = await fetch(`${baseUrl}/health`);
     const data = await response.json();
-    
+
     return {
       success: response.ok,
       data: response.ok ? 'Backend is running' : 'Backend is down',

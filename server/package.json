@@ -10,6 +10,7 @@
   "dependencies": {
     "@langchain/community": "^1.1.17",
     "@langchain/core": "^1.1.27",
+    "@langchain/google-genai": "^2.1.20",
     "@langchain/openai": "^1.2.9",
     "@langchain/pinecone": "^1.0.1",
     "@langchain/textsplitters": "^1.0.1",
@@ -22,7 +23,7 @@
     "helmet": "^7.1.0",
     "langchain": "^1.2.25",
     "multer": "^2.0.2",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

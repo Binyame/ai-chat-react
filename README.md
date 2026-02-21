@@ -191,7 +191,11 @@ curl http://localhost:3001/health
 - Verify API keys in `server/.env`
 - Try Mock AI first to verify app functionality
 
+**RAG/PDF Upload Issues:**
+- See [RAG_SETUP.md](RAG_SETUP.md) for detailed troubleshooting
+- Ensure Pinecone index is created with correct dimensions (768 for Gemini)
+- Check that `pdf-parse@1.1.1` is installed (not v2)
+
 ## 📄 License
 
 MIT License - feel free to use this project for personal or commercial purposes.
-```

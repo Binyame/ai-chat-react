@@ -20,31 +20,67 @@ class RAGService {
     if (this.initialized) return;
 
     try {
+      console.log('🔧 Initializing RAG Service...');
+
       // Initialize Pinecone client
+      console.log('🔧 Step 1: Creating Pinecone client...');
       this.pinecone = new Pinecone({
         apiKey: process.env.PINECONE_API_KEY,
       });
+      console.log('✅ Pinecone client created');
 
-      // Get or create index
+      // Verify index exists
+      console.log('🔧 Step 2: Verifying index exists...');
+      try {
+        const indexList = await this.pinecone.listIndexes();
+        console.log('✅ Index list retrieved:', indexList.indexes?.map(idx => idx.name) || []);
+
+        const indexExists = indexList.indexes?.some(idx => idx.name === this.indexName);
+
+        if (!indexExists) {
+          const errorMsg = `Pinecone index "${this.indexName}" does not exist. Please create it at https://app.pinecone.io/ with:\n` +
+            `  - Name: ${this.indexName}\n` +
+            `  - Dimensions: 768 (for Gemini embeddings)\n` +
+            `  - Metric: cosine`;
+          console.error('❌', errorMsg);
+          throw new Error(errorMsg);
+        }
+        console.log(`✅ Index "${this.indexName}" exists`);
+      } catch (error) {
+        if (error.message.includes('does not exist')) {
+          throw error;
+        }
+        console.warn('⚠️  Could not verify index existence, proceeding anyway:', error.message);
+      }
+
+      // Get index
+      console.log('🔧 Step 3: Getting index reference...');
       this.index = this.pinecone.Index(this.indexName);
+      console.log('✅ Index reference obtained');
 
-      // Initialize OpenAI embeddings
+      // Initialize OpenAI embeddings (768 dimensions with text-embedding-3-small)
+      console.log('🔧 Step 4: Initializing OpenAI embeddings...');
       this.embeddings = new OpenAIEmbeddings({
-        openAIApiKey: process.env.OPENAI_API_KEY,
+        apiKey: process.env.OPENAI_API_KEY,
         modelName: 'text-embedding-3-small',
+        dimensions: 768, // Match Pinecone index dimensions
       });
+      console.log('✅ OpenAI embeddings initialized (768 dimensions)');
 
-      // Initialize LLM for answer generation
+      // Initialize OpenAI LLM for answer generation
+      console.log('🔧 Step 5: Initializing OpenAI LLM...');
       this.llm = new ChatOpenAI({
-        openAIApiKey: process.env.OPENAI_API_KEY,
+        apiKey: process.env.OPENAI_API_KEY,
         modelName: 'gpt-3.5-turbo',
         temperature: 0.7,
       });
+      console.log('✅ OpenAI LLM initialized');
 
       this.initialized = true;
       console.log('✅ RAG Service initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize RAG Service:', error.message);
+      console.error('❌ Error stack:', error.stack);
       throw error;
     }
   }
@@ -186,7 +222,10 @@ If the context doesn't contain enough information to fully answer the question, 
     await this.initialize();
 
     try {
+      console.log('📊 Fetching index stats...');
       const stats = await this.index.describeIndexStats();
+      console.log('📊 Stats received:', JSON.stringify(stats, null, 2));
+
       const namespaces = Object.keys(stats.namespaces || {});
 
       return {
@@ -197,7 +236,8 @@ If the context doesn't contain enough information to fully answer the question, 
         })),
       };
     } catch (error) {
-      console.error('❌ Error listing namespaces:', error.message);
+      console.error('❌ Error listing namespaces:', error);
+      console.error('❌ Error stack:', error.stack);
       throw error;
     }
   }

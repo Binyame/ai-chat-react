@@ -54,6 +54,7 @@ export default function RAGChatComponent() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [namespaces, setNamespaces] = useState<Namespace[]>([]);
@@ -100,31 +101,41 @@ export default function RAGChatComponent() {
     setUploading(true);
     setError(null);
     setUploadSuccess(null);
+    setUploadProgress('Uploading PDF...');
 
     const formData = new FormData();
     formData.append('pdf', file);
     formData.append('namespace', selectedNamespace);
 
     try {
+      setUploadProgress('Processing PDF...');
       const response = await fetch(`${API_BASE_URL}/rag/upload`, {
         method: 'POST',
         body: formData,
       });
 
+      setUploadProgress('Creating embeddings...');
       const data = await response.json();
 
       if (data.success) {
-        setUploadSuccess(`Successfully uploaded ${file.name} (${data.chunks} chunks from ${data.pages} pages)`);
+        setUploadProgress('');
+        setUploadSuccess(`✅ Successfully uploaded ${file.name} (${data.chunks} chunks from ${data.pages} pages)`);
         loadNamespaces();
         // Clear the file input
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
       } else {
-        setError(data.error || 'Failed to upload PDF');
+        setUploadProgress('');
+        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error || 'Failed to upload PDF');
+        setError(errorMsg);
+        console.error('Upload error:', data);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload PDF');
+      setUploadProgress('');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
+      console.error('Upload exception:', err);
     } finally {
       setUploading(false);
     }
@@ -263,6 +274,13 @@ export default function RAGChatComponent() {
           </Button>
         </Stack>
 
+        {/* Upload Progress */}
+        {uploadProgress && (
+          <Alert severity="info" sx={{ mt: 2 }} icon={<CircularProgress size={20} />}>
+            {uploadProgress}
+          </Alert>
+        )}
+
         {/* Success/Error messages */}
         {uploadSuccess && (
           <Alert severity="success" sx={{ mt: 2 }} onClose={() => setUploadSuccess(null)}>
@@ -295,16 +313,17 @@ export default function RAGChatComponent() {
               sx={{
                 p: 2,
                 mb: 2,
-                bgcolor: message.role === 'user' ? 'primary.light' : 'background.paper',
+                bgcolor: message.role === 'user' ? 'primary.main' : 'background.paper',
+                color: message.role === 'user' ? 'primary.contrastText' : 'text.primary',
                 ml: message.role === 'user' ? 'auto' : 0,
                 mr: message.role === 'user' ? 0 : 'auto',
                 maxWidth: '80%',
               }}
             >
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: 'inherit' }}>
                 {message.role === 'user' ? 'You' : 'AI Assistant'}
               </Typography>
-              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', color: 'inherit' }}>
                 {message.content}
               </Typography>
 

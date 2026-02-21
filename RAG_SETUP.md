@@ -50,10 +50,12 @@ The backend dependencies are already installed. If you need to reinstall:
 
 ```bash
 cd server
-npm install --legacy-peer-deps langchain @langchain/core @langchain/openai @langchain/pinecone @langchain/community @langchain/textsplitters @pinecone-database/pinecone pdf-parse multer
+npm install --legacy-peer-deps langchain @langchain/core @langchain/openai @langchain/pinecone @langchain/community @langchain/textsplitters @pinecone-database/pinecone pdf-parse@1.1.1 multer
 ```
 
-**Note:** The `--legacy-peer-deps` flag is required due to dependency version conflicts in LangChain packages.
+**Important Notes:**
+- The `--legacy-peer-deps` flag is required due to dependency version conflicts in LangChain packages
+- Must use `pdf-parse@1.1.1` (v1) - v2 is not yet supported by LangChain
 
 ## Configuration
 

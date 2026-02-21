@@ -369,12 +369,12 @@ app.post('/api/rag/upload', upload.single('pdf'), async (req, res) => {
       });
     }
 
-    if (!process.env.OPENAI_API_KEY || !process.env.PINECONE_API_KEY) {
+    if (!process.env.GEMINI_API_KEY || !process.env.PINECONE_API_KEY) {
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
       return res.status(500).json({
         success: false,
-        error: 'OpenAI and Pinecone API keys are required for RAG functionality'
+        error: 'Gemini and Pinecone API keys are required for RAG functionality'
       });
     }
 
@@ -425,10 +425,10 @@ app.post('/api/rag/query', async (req, res) => {
       });
     }
 
-    if (!process.env.OPENAI_API_KEY || !process.env.PINECONE_API_KEY) {
+    if (!process.env.GEMINI_API_KEY || !process.env.PINECONE_API_KEY) {
       return res.status(500).json({
         success: false,
-        error: 'OpenAI and Pinecone API keys are required for RAG functionality'
+        error: 'Gemini and Pinecone API keys are required for RAG functionality'
       });
     }
 

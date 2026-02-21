@@ -1,13 +1,13 @@
-# Quick Start: RAG Pipeline
+# Quick Start: RAG Pipeline (Gemini Version)
 
-Get your RAG pipeline running in 5 minutes!
+Get your RAG pipeline running in 5 minutes using Google Gemini!
 
 ## Step 1: Get API Keys (5 minutes)
 
-### OpenAI API Key
-1. Go to https://platform.openai.com/api-keys
-2. Click "Create new secret key"
-3. Copy the key (starts with `sk-`)
+### Gemini API Key
+1. Go to https://makersuite.google.com/app/apikey
+2. Click "Create API Key"
+3. Copy the key
 
 ### Pinecone API Key
 1. Go to https://www.pinecone.io/ and sign up (free tier)
@@ -16,10 +16,12 @@ Get your RAG pipeline running in 5 minutes!
 
 ## Step 2: Create Pinecone Index (2 minutes)
 
+⚠️ **IMPORTANT:** Gemini uses 768 dimensions (not 1536 like OpenAI)
+
 1. In Pinecone dashboard, click "Create Index"
 2. Fill in:
-   - **Name:** `ai-chat-rag`
-   - **Dimensions:** `1536`
+   - **Name:** `ai-chat-rag-gemini`
+   - **Dimensions:** `768` ⚠️ **Must be 768 for Gemini**
    - **Metric:** `cosine`
    - **Cloud:** Choose closest region
 3. Click "Create Index"
@@ -29,9 +31,9 @@ Get your RAG pipeline running in 5 minutes!
 Edit `server/.env` and add:
 
 ```env
-OPENAI_API_KEY=sk-your-openai-key-here
+GEMINI_API_KEY=your-gemini-key-here
 PINECONE_API_KEY=your-pinecone-key-here
-PINECONE_INDEX_NAME=ai-chat-rag
+PINECONE_INDEX_NAME=ai-chat-rag-gemini
 ```
 
 ## Step 4: Start the App (1 minute)
@@ -47,8 +49,7 @@ You should see:
 ✅ RAG Service initialized successfully
 🚀 AI Chat Backend running on port 3001
 🔑 API Keys configured:
-   OpenAI: ✅
-   Pinecone: ✅
+   Gemini: ✅
 ```
 
 **Terminal 2 - Frontend:**
@@ -68,19 +69,22 @@ npm run dev
 
 ## Troubleshooting
 
-### "OpenAI and Pinecone API keys are required"
+### "Gemini and Pinecone API keys are required"
 - Check your `server/.env` file has both keys
 - Restart the server after adding keys
 
 ### "Failed to initialize RAG Service"
 - Verify Pinecone index exists
-- Check index name is exactly `ai-chat-rag`
-- Ensure dimensions are `1536`
+- Check index name matches your `.env` setting
+- ⚠️ **CRITICAL:** Ensure dimensions are `768` (not 1536)
+- If you have an old index with 1536 dimensions, create a new one
 
-### Server won't start
+### Server won't start or "Failed to load pdf-parse"
 ```bash
 cd server
 npm install --legacy-peer-deps
+# Ensure pdf-parse v1 is installed (v2 not supported yet)
+npm install pdf-parse@1.1.1 --legacy-peer-deps
 npm run dev
 ```
 
@@ -95,7 +99,14 @@ npm run dev
 
 With free tiers:
 - **Pinecone:** Free (up to 100K vectors)
-- **OpenAI:** ~$0.01 per 100 pages uploaded
-- **Total:** Essentially free for testing!
+- **Gemini:** Free (60 requests/min, 1500 requests/day)
+- **Total:** Completely free for testing and light usage!
 
-Enjoy your RAG-powered AI chat! 🚀
+## Why Gemini?
+
+✅ Generous free tier
+✅ Fast response times
+✅ High-quality embeddings
+✅ No credit card required to start
+
+Enjoy your Gemini-powered RAG chat! 🚀
