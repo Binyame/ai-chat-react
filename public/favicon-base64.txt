@@ -1,0 +1,17 @@
+Since we can't generate PNG files directly, you can:
+
+1. Use the SVG favicon (already works in all modern browsers)
+2. Or convert the SVG to PNG using an online tool:
+   - Go to: https://cloudconvert.com/svg-to-png
+   - Upload public/favicon.svg
+   - Download as 32x32, 64x64, and 128x128 PNG
+   - Save as favicon-32.png, favicon-64.png, favicon-128.png
+
+The SVG favicon I created features:
+- Purple gradient chat bubble
+- Neural network pattern (representing AI)
+- Sparkle effects (AI indicator)
+- Professional and unique design
+- Fully scalable
+
+Current implementation uses SVG which works perfectly in all modern browsers!

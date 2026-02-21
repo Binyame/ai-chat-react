@@ -6,6 +6,7 @@ A modern, secure React application for chatting with multiple AI providers inclu
 
 ### Core Features
 - **Multiple AI Providers**: OpenAI GPT, Hugging Face, Google Gemini, and Mock AI
+- **RAG Pipeline**: Upload PDFs and get AI answers with citations using LangChain.js + Pinecone
 - **Persistent Chat History**: Automatic localStorage backup with session management
 - **Secure API Handling**: Backend proxy eliminates frontend API key exposure
 - **Session Management**: Save, load, export, and import chat conversations
@@ -61,8 +62,12 @@ cp .env.example .env.local
 ```env
 # API Keys (add the ones you want to use)
 OPENAI_API_KEY=your_openai_api_key_here
-HUGGINGFACE_TOKEN=your_huggingface_token_here  
+HUGGINGFACE_TOKEN=your_huggingface_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Pinecone (Required for RAG functionality)
+PINECONE_API_KEY=your_pinecone_api_key_here
+PINECONE_INDEX_NAME=ai-chat-rag
 
 # Server Configuration
 PORT=3001
@@ -75,8 +80,26 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 - **OpenAI**: [Get API key](https://platform.openai.com/api-keys)
 - **Hugging Face**: [Get token](https://huggingface.co/settings/tokens)
 - **Google Gemini**: [Get API key](https://makersuite.google.com/app/apikey)
+- **Pinecone** (for RAG): [Get API key](https://www.pinecone.io/) and create an index
 
 > **Note**: You can start immediately with the Mock AI provider - no API keys required!
+
+### 5. RAG Pipeline Setup (Optional)
+
+To use the RAG feature with PDF documents:
+
+1. **Get Pinecone API Key**: Sign up at [Pinecone](https://www.pinecone.io/)
+2. **Create Pinecone Index**:
+   - Name: `ai-chat-rag`
+   - Dimensions: `1536` (for OpenAI embeddings)
+   - Metric: `cosine`
+3. **Add to `.env`**:
+   ```env
+   PINECONE_API_KEY=your_pinecone_api_key
+   PINECONE_INDEX_NAME=ai-chat-rag
+   ```
+
+📖 **See [RAG_SETUP.md](RAG_SETUP.md) for detailed RAG setup and usage guide**
 
 ## 🚀 Running the Application
 
@@ -115,6 +138,14 @@ npm start
 1. **Launch the app** - Open http://localhost:5173
 2. **Choose Provider** - Click tabs to switch between AI providers
 3. **Start Chatting** - Type a message and press Enter or click Send
+
+### Using RAG with PDFs
+1. **Select RAG Tab** - Click "RAG with PDFs" tab
+2. **Upload PDF** - Click "Upload PDF" and select a document
+3. **Ask Questions** - Get AI answers with citations to your documents
+4. **View Citations** - See source references with page numbers
+
+📖 **Full RAG Guide**: See [RAG_SETUP.md](RAG_SETUP.md) for complete documentation
 
 ### Session Management
 1. **Access Sessions** - Click the history icon (📚) in the top-left

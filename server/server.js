@@ -3,10 +3,46 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const axios = require('axios');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
+
+const ragService = require('./services/ragService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Create uploads directory if it doesn't exist
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Configure multer for PDF uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
 
 // Security middleware
 app.use(helmet());
@@ -321,9 +357,168 @@ app.post('/api/gemini/chat', async (req, res) => {
   }
 });
 
+// RAG Pipeline Endpoints
+
+// Upload and ingest PDF
+app.post('/api/rag/upload', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No PDF file uploaded'
+      });
+    }
+
+    if (!process.env.OPENAI_API_KEY || !process.env.PINECONE_API_KEY) {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+      return res.status(500).json({
+        success: false,
+        error: 'OpenAI and Pinecone API keys are required for RAG functionality'
+      });
+    }
+
+    const namespace = req.body.namespace || 'default';
+    const metadata = {
+      namespace,
+      uploadedAt: new Date().toISOString(),
+      originalName: req.file.originalname,
+    };
+
+    const result = await ragService.ingestPDF(req.file.path, metadata);
+
+    // Optionally delete the file after ingestion
+    if (process.env.DELETE_UPLOADED_PDFS !== 'false') {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.json({
+      success: true,
+      ...result,
+      message: `Successfully ingested ${result.fileName}`
+    });
+
+  } catch (error) {
+    console.error('PDF Upload Error:', error.message);
+
+    // Clean up file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to ingest PDF'
+    });
+  }
+});
+
+// Query RAG with citations
+app.post('/api/rag/query', async (req, res) => {
+  try {
+    const { question, namespace = 'default', topK = 4 } = req.body;
+
+    if (!question) {
+      return res.status(400).json({
+        success: false,
+        error: 'Question is required'
+      });
+    }
+
+    if (!process.env.OPENAI_API_KEY || !process.env.PINECONE_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'OpenAI and Pinecone API keys are required for RAG functionality'
+      });
+    }
+
+    const result = await ragService.query(question, namespace, topK);
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('RAG Query Error:', error.message);
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to query RAG'
+    });
+  }
+});
+
+// List available namespaces
+app.get('/api/rag/namespaces', async (req, res) => {
+  try {
+    if (!process.env.PINECONE_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'Pinecone API key is required'
+      });
+    }
+
+    const result = await ragService.listNamespaces();
+    res.json(result);
+
+  } catch (error) {
+    console.error('List Namespaces Error:', error.message);
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to list namespaces'
+    });
+  }
+});
+
+// Delete a namespace
+app.delete('/api/rag/namespace/:namespace', async (req, res) => {
+  try {
+    const { namespace } = req.params;
+
+    if (!namespace) {
+      return res.status(400).json({
+        success: false,
+        error: 'Namespace is required'
+      });
+    }
+
+    if (!process.env.PINECONE_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'Pinecone API key is required'
+      });
+    }
+
+    await ragService.deleteNamespace(namespace);
+
+    res.json({
+      success: true,
+      message: `Namespace '${namespace}' deleted successfully`
+    });
+
+  } catch (error) {
+    console.error('Delete Namespace Error:', error.message);
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete namespace'
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
+
+  // Handle multer errors
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: 'File too large. Maximum size is 10MB'
+      });
+    }
+  }
+
   res.status(500).json({
     success: false,
     error: 'Internal server error'
@@ -331,7 +526,7 @@ app.use((err, req, res, next) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use('*', (_req, res) => {
   res.status(404).json({
     success: false,
     error: 'Endpoint not found'

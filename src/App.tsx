@@ -20,6 +20,7 @@ import ChatComponent from './components/ChatComponent'
 import MockChatComponent from './components/MockChatComponent'
 import HuggingFaceChatComponent from './components/HuggingFaceChatComponent'
 import GeminiChatComponent from './components/GeminiChatComponent'
+import RAGChatComponent from './components/RAGChatComponent'
 
 function App() {
   const [activeTab, setActiveTab] = useState(0);
@@ -90,9 +91,9 @@ function App() {
             borderBottom: 1, 
             borderColor: 'divider'
           }}>
-            <Tabs 
-              value={activeTab} 
-              onChange={handleTabChange} 
+            <Tabs
+              value={activeTab}
+              onChange={handleTabChange}
               aria-label="chat provider tabs"
               variant="scrollable"
               scrollButtons="auto"
@@ -101,19 +102,21 @@ function App() {
               <Tab label="OpenAI API" />
               <Tab label="Hugging Face" />
               <Tab label="Gemini API" />
+              <Tab label="RAG with PDFs" />
             </Tabs>
           </Box>
           
-          <Box sx={{ 
-            flexGrow: 1, 
-            overflow: 'hidden', 
-            display: 'flex', 
+          <Box sx={{
+            flexGrow: 1,
+            overflow: 'hidden',
+            display: 'flex',
             flexDirection: 'column'
           }}>
             {activeTab === 0 && <MockChatComponent />}
             {activeTab === 1 && <ChatComponent />}
             {activeTab === 2 && <HuggingFaceChatComponent />}
             {activeTab === 3 && <GeminiChatComponent />}
+            {activeTab === 4 && <RAGChatComponent />}
           </Box>
           
           <SessionManager 
