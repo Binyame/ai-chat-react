@@ -2,6 +2,8 @@
 
 A modern, secure React application for chatting with multiple AI providers including OpenAI, Hugging Face, and Google Gemini. Features persistent chat sessions, secure API key management via backend proxy, and comprehensive error handling.
 
+> **⚠️ SECURITY WARNING**: Never commit `.env` files to git! They contain sensitive API keys. Use `.env.example` files for documentation only.
+
 ## 🚀 Features
 
 ### Core Features
