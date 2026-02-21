@@ -15,235 +15,248 @@ interface LogEntry {
   context?: string;
 }
 
-class Logger {
-  private logLevel: LogLevel;
-  private logs: LogEntry[] = [];
-  private maxLogs = 1000; // Keep last 1000 logs in memory
+// Logger state (closure-based)
+let logLevel: LogLevel = import.meta.env.DEV ? LogLevel.DEBUG : LogLevel.INFO;
+let logs: LogEntry[] = [];
+const maxLogs = 1000; // Keep last 1000 logs in memory
 
-  constructor() {
-    this.logLevel = import.meta.env.DEV ? LogLevel.DEBUG : LogLevel.INFO;
-  }
+function shouldLog(level: LogLevel): boolean {
+  return level >= logLevel;
+}
 
-  private shouldLog(level: LogLevel): boolean {
-    return level >= this.logLevel;
-  }
+function createLogEntry(level: LogLevel, message: string, data?: unknown, context?: string): LogEntry {
+  return {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    data,
+    context
+  };
+}
 
-  private createLogEntry(level: LogLevel, message: string, data?: unknown, context?: string): LogEntry {
-    return {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      data,
-      context
-    };
-  }
+function addLog(entry: LogEntry): void {
+  logs.push(entry);
 
-  private addLog(entry: LogEntry): void {
-    this.logs.push(entry);
-    
-    // Keep only the most recent logs
-    if (this.logs.length > this.maxLogs) {
-      this.logs = this.logs.slice(-this.maxLogs);
-    }
-  }
-
-  private formatMessage(entry: LogEntry): string {
-    const levelNames = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
-    const levelName = levelNames[entry.level];
-    const context = entry.context ? `[${entry.context}] ` : '';
-    return `${entry.timestamp} ${levelName}: ${context}${entry.message}`;
-  }
-
-  debug(message: string, data?: unknown, context?: string): void {
-    if (!this.shouldLog(LogLevel.DEBUG)) return;
-    
-    const entry = this.createLogEntry(LogLevel.DEBUG, message, data, context);
-    this.addLog(entry);
-    
-    console.debug(this.formatMessage(entry), data || '');
-  }
-
-  info(message: string, data?: unknown, context?: string): void {
-    if (!this.shouldLog(LogLevel.INFO)) return;
-    
-    const entry = this.createLogEntry(LogLevel.INFO, message, data, context);
-    this.addLog(entry);
-    
-    console.info(this.formatMessage(entry), data || '');
-  }
-
-  warn(message: string, data?: unknown, context?: string): void {
-    if (!this.shouldLog(LogLevel.WARN)) return;
-    
-    const entry = this.createLogEntry(LogLevel.WARN, message, data, context);
-    this.addLog(entry);
-    
-    console.warn(this.formatMessage(entry), data || '');
-  }
-
-  error(message: string, error?: Error | unknown, context?: string): void {
-    if (!this.shouldLog(LogLevel.ERROR)) return;
-    
-    const entry = this.createLogEntry(LogLevel.ERROR, message, error, context);
-    this.addLog(entry);
-    
-    console.error(this.formatMessage(entry), error || '');
-    
-    // In production, send critical errors to external service
-    if (!import.meta.env.DEV) {
-      this.sendToExternalService(entry);
-    }
-  }
-
-  private async sendToExternalService(entry: LogEntry): Promise<void> {
-    try {
-      // Example: Send to your logging service
-      // await fetch('/api/logs', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     ...entry,
-      //     userAgent: navigator.userAgent,
-      //     url: window.location.href,
-      //     userId: getUserId(), // if available
-      //     sessionId: getSessionId(), // if available
-      //   })
-      // });
-      
-      console.log('Would send to external service:', entry);
-    } catch (error) {
-      console.error('Failed to send log to external service:', error);
-    }
-  }
-
-  // API-specific logging methods
-  apiRequest(method: string, url: string, data?: unknown): void {
-    this.info(`API Request: ${method} ${url}`, data, 'API');
-  }
-
-  apiResponse(method: string, url: string, status: number, data?: unknown): void {
-    const level = status >= 400 ? LogLevel.ERROR : LogLevel.INFO;
-    const message = `API Response: ${method} ${url} - ${status}`;
-    
-    if (level === LogLevel.ERROR) {
-      this.error(message, data, 'API');
-    } else {
-      this.info(message, data, 'API');
-    }
-  }
-
-  apiError(method: string, url: string, error: Error | unknown): void {
-    this.error(`API Error: ${method} ${url}`, error, 'API');
-  }
-
-  // User interaction logging
-  userAction(action: string, data?: unknown): void {
-    this.info(`User Action: ${action}`, data, 'USER');
-  }
-
-  // Performance logging
-  performance(operation: string, duration: number, data?: unknown): void {
-    const level = duration > 1000 ? LogLevel.WARN : LogLevel.INFO;
-    const message = `Performance: ${operation} took ${duration}ms`;
-    
-    if (level === LogLevel.WARN) {
-      this.warn(message, data, 'PERF');
-    } else {
-      this.info(message, data, 'PERF');
-    }
-  }
-
-  // Storage operations
-  storageOperation(operation: string, key: string, success: boolean, error?: Error): void {
-    if (success) {
-      this.debug(`Storage: ${operation} ${key}`, undefined, 'STORAGE');
-    } else {
-      this.error(`Storage: Failed to ${operation} ${key}`, error, 'STORAGE');
-    }
-  }
-
-  // Get logs for debugging
-  getLogs(level?: LogLevel): LogEntry[] {
-    if (level !== undefined) {
-      return this.logs.filter(log => log.level >= level);
-    }
-    return [...this.logs];
-  }
-
-  // Export logs for support
-  exportLogs(): string {
-    return JSON.stringify({
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
-      logs: this.logs
-    }, null, 2);
-  }
-
-  // Clear logs
-  clearLogs(): void {
-    this.logs = [];
-    this.info('Logs cleared', undefined, 'LOGGER');
-  }
-
-  // Set log level dynamically
-  setLogLevel(level: LogLevel): void {
-    this.logLevel = level;
-    this.info(`Log level set to ${LogLevel[level]}`, undefined, 'LOGGER');
+  // Keep only the most recent logs
+  if (logs.length > maxLogs) {
+    logs = logs.slice(-maxLogs);
   }
 }
 
-// Performance measurement utility
-export class PerformanceLogger {
-  private startTimes: Map<string, number> = new Map();
+function formatMessage(entry: LogEntry): string {
+  const levelNames = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
+  const levelName = levelNames[entry.level];
+  const context = entry.context ? `[${entry.context}] ` : '';
+  return `${entry.timestamp} ${levelName}: ${context}${entry.message}`;
+}
 
-  start(operation: string): void {
-    this.startTimes.set(operation, performance.now());
-    logger.debug(`Started: ${operation}`, undefined, 'PERF');
-  }
+export function debug(message: string, data?: unknown, context?: string): void {
+  if (!shouldLog(LogLevel.DEBUG)) return;
 
-  end(operation: string, data?: unknown): number {
-    const startTime = this.startTimes.get(operation);
-    if (!startTime) {
-      logger.warn(`No start time found for operation: ${operation}`, undefined, 'PERF');
-      return 0;
-    }
+  const entry = createLogEntry(LogLevel.DEBUG, message, data, context);
+  addLog(entry);
 
-    const duration = performance.now() - startTime;
-    this.startTimes.delete(operation);
-    
-    logger.performance(operation, duration, data);
-    return duration;
-  }
+  console.debug(formatMessage(entry), data || '');
+}
 
-  measure<T>(operation: string, fn: () => T | Promise<T>, data?: unknown): T | Promise<T> {
-    this.start(operation);
-    
-    try {
-      const result = fn();
-      
-      if (result instanceof Promise) {
-        return result.finally(() => {
-          this.end(operation, data);
-        });
-      } else {
-        this.end(operation, data);
-        return result;
-      }
-    } catch (error) {
-      this.end(operation, data ? { ...data as Record<string, unknown>, error } : { error });
-      throw error;
-    }
+export function info(message: string, data?: unknown, context?: string): void {
+  if (!shouldLog(LogLevel.INFO)) return;
+
+  const entry = createLogEntry(LogLevel.INFO, message, data, context);
+  addLog(entry);
+
+  console.info(formatMessage(entry), data || '');
+}
+
+export function warn(message: string, data?: unknown, context?: string): void {
+  if (!shouldLog(LogLevel.WARN)) return;
+
+  const entry = createLogEntry(LogLevel.WARN, message, data, context);
+  addLog(entry);
+
+  console.warn(formatMessage(entry), data || '');
+}
+
+export function error(message: string, errorData?: Error | unknown, context?: string): void {
+  if (!shouldLog(LogLevel.ERROR)) return;
+
+  const entry = createLogEntry(LogLevel.ERROR, message, errorData, context);
+  addLog(entry);
+
+  console.error(formatMessage(entry), errorData || '');
+
+  // In production, send critical errors to external service
+  if (!import.meta.env.DEV) {
+    sendToExternalService(entry);
   }
 }
 
-// Create singleton instances
-export const logger = new Logger();
-export const perfLogger = new PerformanceLogger();
+async function sendToExternalService(entry: LogEntry): Promise<void> {
+  try {
+    // Example: Send to your logging service
+    // await fetch('/api/logs', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({
+    //     ...entry,
+    //     userAgent: navigator.userAgent,
+    //     url: window.location.href,
+    //     userId: getUserId(), // if available
+    //     sessionId: getSessionId(), // if available
+    //   })
+    // });
+
+    console.log('Would send to external service:', entry);
+  } catch (error) {
+    console.error('Failed to send log to external service:', error);
+  }
+}
+
+// API-specific logging methods
+export function apiRequest(method: string, url: string, data?: unknown): void {
+  info(`API Request: ${method} ${url}`, data, 'API');
+}
+
+export function apiResponse(method: string, url: string, status: number, data?: unknown): void {
+  const level = status >= 400 ? LogLevel.ERROR : LogLevel.INFO;
+  const message = `API Response: ${method} ${url} - ${status}`;
+
+  if (level === LogLevel.ERROR) {
+    error(message, data, 'API');
+  } else {
+    info(message, data, 'API');
+  }
+}
+
+export function apiError(method: string, url: string, errorData: Error | unknown): void {
+  error(`API Error: ${method} ${url}`, errorData, 'API');
+}
+
+// User interaction logging
+export function userAction(action: string, data?: unknown): void {
+  info(`User Action: ${action}`, data, 'USER');
+}
+
+// Performance logging
+export function performance(operation: string, duration: number, data?: unknown): void {
+  const level = duration > 1000 ? LogLevel.WARN : LogLevel.INFO;
+  const message = `Performance: ${operation} took ${duration}ms`;
+
+  if (level === LogLevel.WARN) {
+    warn(message, data, 'PERF');
+  } else {
+    info(message, data, 'PERF');
+  }
+}
+
+// Storage operations
+export function storageOperation(operation: string, key: string, success: boolean, errorData?: Error): void {
+  if (success) {
+    debug(`Storage: ${operation} ${key}`, undefined, 'STORAGE');
+  } else {
+    error(`Storage: Failed to ${operation} ${key}`, errorData, 'STORAGE');
+  }
+}
+
+// Get logs for debugging
+export function getLogs(level?: LogLevel): LogEntry[] {
+  if (level !== undefined) {
+    return logs.filter(log => log.level >= level);
+  }
+  return [...logs];
+}
+
+// Export logs for support
+export function exportLogs(): string {
+  return JSON.stringify({
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    url: window.location.href,
+    logs: logs
+  }, null, 2);
+}
+
+// Clear logs
+export function clearLogs(): void {
+  logs = [];
+  info('Logs cleared', undefined, 'LOGGER');
+}
+
+// Set log level dynamically
+export function setLogLevel(level: LogLevel): void {
+  logLevel = level;
+  info(`Log level set to ${LogLevel[level]}`, undefined, 'LOGGER');
+}
+
+// Performance measurement utility (closure-based)
+const startTimes = new Map<string, number>();
+
+export function perfStart(operation: string): void {
+  startTimes.set(operation, performance.now());
+  debug(`Started: ${operation}`, undefined, 'PERF');
+}
+
+export function perfEnd(operation: string, data?: unknown): number {
+  const startTime = startTimes.get(operation);
+  if (!startTime) {
+    warn(`No start time found for operation: ${operation}`, undefined, 'PERF');
+    return 0;
+  }
+
+  const duration = performance.now() - startTime;
+  startTimes.delete(operation);
+
+  performance(operation, duration, data);
+  return duration;
+}
+
+export function perfMeasure<T>(operation: string, fn: () => T | Promise<T>, data?: unknown): T | Promise<T> {
+  perfStart(operation);
+
+  try {
+    const result = fn();
+
+    if (result instanceof Promise) {
+      return result.finally(() => {
+        perfEnd(operation, data);
+      });
+    } else {
+      perfEnd(operation, data);
+      return result;
+    }
+  } catch (error) {
+    perfEnd(operation, data ? { ...data as Record<string, unknown>, error } : { error });
+    throw error;
+  }
+}
+
+// Default export object for backward compatibility
+const logger = {
+  debug,
+  info,
+  warn,
+  error,
+  apiRequest,
+  apiResponse,
+  apiError,
+  userAction,
+  performance,
+  storageOperation,
+  getLogs,
+  exportLogs,
+  clearLogs,
+  setLogLevel,
+};
+
+export const perfLogger = {
+  start: perfStart,
+  end: perfEnd,
+  measure: perfMeasure,
+};
 
 // Global error handler
 window.addEventListener('error', (event) => {
-  logger.error('Global Error', {
+  error('Global Error', {
     message: event.message,
     filename: event.filename,
     lineno: event.lineno,
@@ -253,7 +266,7 @@ window.addEventListener('error', (event) => {
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  logger.error('Unhandled Promise Rejection', {
+  error('Unhandled Promise Rejection', {
     reason: event.reason,
     promise: event.promise
   }, 'GLOBAL');
