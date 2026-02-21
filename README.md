@@ -1,8 +1,26 @@
-# AI Chat React Application
+# 🤖 AI Chat with RAG Pipeline
 
-A modern, secure React application for chatting with multiple AI providers including OpenAI, Hugging Face, and Google Gemini. Features persistent chat sessions, secure API key management via backend proxy, and comprehensive error handling.
+> **Chat with AI. Upload PDFs. Get answers with citations.**
 
-> **⚠️ SECURITY WARNING**: Never commit `.env` files to git! They contain sensitive API keys. Use `.env.example` files for documentation only.
+A production-ready React application featuring **Retrieval-Augmented Generation (RAG)** - upload PDFs and receive AI-generated answers with source citations. Built with React, TypeScript, LangChain.js, Pinecone, and OpenAI.
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![LangChain](https://img.shields.io/badge/🦜_LangChain-121212?style=flat)](https://js.langchain.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
+
+> **⚠️ SECURITY**: Never commit `.env` files! Use `.env.example` for documentation.
+
+---
+
+## ✨ What Makes This Special?
+
+🎯 **RAG Pipeline** - Upload PDFs and ask questions with cited answers
+🤖 **Multi-AI Support** - OpenAI, Google Gemini, Hugging Face
+🔐 **Secure Architecture** - Backend proxy, no exposed API keys
+📚 **Smart Search** - Vector embeddings + semantic matching
+💾 **Session Management** - Save, export, and resume conversations
+🎨 **Modern UI** - Material-UI with dark mode support
 
 ## 🚀 Features
 

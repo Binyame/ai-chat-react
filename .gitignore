@@ -47,3 +47,11 @@ test-*.js
 *.tmp
 *.temp
 debug-*.js
+
+# Documentation - Marketing/Notes (keep local only)
+FEATURES.md
+PITCH.md
+*_GUIDE.md
+*GUIDE.md
+server/test-*.js
+server/*test*.js
