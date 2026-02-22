@@ -152,42 +152,63 @@ async function query(question, namespace = 'default', topK = 4) {
       namespace,
     });
 
-    // Retrieve relevant documents
-    const relevantDocs = await vectorStore.similaritySearch(question, topK);
+    // Retrieve relevant documents with similarity scores
+    const relevantDocs = await vectorStore.similaritySearchWithScore(question, topK);
 
     if (relevantDocs.length === 0) {
       return {
-        success: false,
-        error: 'No relevant documents found. Please upload some PDFs first.',
+        success: true,
+        answer: 'No documents have been uploaded yet. Please upload a PDF to get started.',
+        citations: [],
+        sources: 0,
       };
     }
 
-    console.log(`📚 Found ${relevantDocs.length} relevant chunks`);
+    // Filter by relevance threshold (cosine similarity > 0.7 indicates good relevance)
+    const RELEVANCE_THRESHOLD = 0.7;
+    const relevantResults = relevantDocs.filter(([doc, score]) => score >= RELEVANCE_THRESHOLD);
 
-    // Build context from retrieved documents
-    const context = relevantDocs
-      .map((doc, i) => `[${i + 1}] ${doc.pageContent}`)
+    if (relevantResults.length === 0) {
+      console.log(`⚠️  No chunks met relevance threshold (best score: ${relevantDocs[0][1].toFixed(3)})`);
+      return {
+        success: true,
+        answer: 'I could not find relevant information about this topic in the uploaded documents. The question may be outside the scope of the available content.',
+        citations: [],
+        sources: 0,
+      };
+    }
+
+    console.log(`📚 Found ${relevantResults.length} relevant chunks (${relevantDocs.length - relevantResults.length} filtered out)`);
+
+    // Build context from relevant documents
+    const context = relevantResults
+      .map(([doc, score], i) => `[${i + 1}] (relevance: ${score.toFixed(2)}) ${doc.pageContent}`)
       .join('\n\n');
 
     // Create citations
-    const citations = relevantDocs.map((doc, i) => ({
+    const citations = relevantResults.map(([doc, score], i) => ({
       id: i + 1,
       fileName: doc.metadata.fileName || 'Unknown',
       page: doc.metadata.loc?.pageNumber || doc.metadata.page || 'N/A',
       text: doc.pageContent.substring(0, 150) + '...',
+      relevance: score.toFixed(2),
     }));
 
-    // Generate answer with LLM
-    const prompt = `You are a helpful assistant that answers questions based on the provided context.
-Always cite your sources using the reference numbers [1], [2], etc. when using information from the context.
+    // Generate answer with strict grounding instructions
+    const prompt = `You are a document Q&A assistant. Your job is to answer questions ONLY using information from the provided context.
 
-Context:
+CRITICAL RULES:
+1. If the context does not contain information to answer the question, respond with: "This information is not found in the uploaded documents."
+2. NEVER make up or infer information that is not explicitly stated in the context.
+3. ALWAYS cite your sources using [1], [2], etc. for every claim you make.
+4. If only partial information is available, state what you found and what is missing.
+
+Context from documents:
 ${context}
 
 Question: ${question}
 
-Answer the question based on the context above. Include citations to the relevant sources using [1], [2], etc.
-If the context doesn't contain enough information to fully answer the question, say so.`;
+Answer based ONLY on the context above. If the answer is not in the context, say "This information is not found in the uploaded documents."`;
 
     const response = await llm.invoke(prompt);
     const answer = response.content;
