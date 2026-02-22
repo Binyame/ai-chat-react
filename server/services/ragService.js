@@ -153,6 +153,8 @@ async function query(question, namespace = 'default', topK = 4) {
     });
 
     // Retrieve relevant documents with similarity scores
+    // Limit to topK (default 4) to avoid context stuffing and excessive token usage
+    // More chunks != better answers; quality matters more than quantity
     const relevantDocs = await vectorStore.similaritySearchWithScore(question, topK);
 
     if (relevantDocs.length === 0) {
@@ -164,21 +166,45 @@ async function query(question, namespace = 'default', topK = 4) {
       };
     }
 
-    // Filter by relevance threshold (cosine similarity > 0.7 indicates good relevance)
-    const RELEVANCE_THRESHOLD = 0.7;
-    const relevantResults = relevantDocs.filter(([doc, score]) => score >= RELEVANCE_THRESHOLD);
+    // Log all scores for debugging
+    console.log(`📊 Similarity scores:`, relevantDocs.map(([_, score]) => score.toFixed(3)).join(', '));
 
-    if (relevantResults.length === 0) {
-      console.log(`⚠️  No chunks met relevance threshold (best score: ${relevantDocs[0][1].toFixed(3)})`);
+    // Dynamic threshold: keep chunks within 70% of top score
+    // This adapts to different embedding models/corpora without hardcoded values
+    // Always keep at least top 2 chunks if top score is reasonably strong (>0.3)
+    const topScore = relevantDocs[0][1];
+    const MIN_TOP_SCORE = 0.3; // Absolute minimum for top result
+    const RELATIVE_THRESHOLD = 0.7; // Keep chunks within 70% of top score
+
+    let relevantResults;
+    if (topScore < MIN_TOP_SCORE) {
+      // Top result is weak - likely no relevant documents
+      console.log(`⚠️  Top score ${topScore.toFixed(3)} below minimum threshold ${MIN_TOP_SCORE}`);
       return {
         success: true,
         answer: 'I could not find relevant information about this topic in the uploaded documents. The question may be outside the scope of the available content.',
         citations: [],
         sources: 0,
       };
-    }
+    } else {
+      // Filter by dynamic threshold, but always keep at least top 2
+      const dynamicThreshold = topScore * RELATIVE_THRESHOLD;
+      relevantResults = relevantDocs.filter(([_, score]) => score >= dynamicThreshold);
 
-    console.log(`📚 Found ${relevantResults.length} relevant chunks (${relevantDocs.length - relevantResults.length} filtered out)`);
+      // Ensure we keep at least 2 chunks if available
+      if (relevantResults.length < 2 && relevantDocs.length >= 2) {
+        relevantResults = relevantDocs.slice(0, 2);
+      }
+
+      // Cap at maximum to prevent context stuffing (rare with topK=4, but safeguard for larger topK)
+      const MAX_CHUNKS = 6;
+      if (relevantResults.length > MAX_CHUNKS) {
+        console.log(`⚠️  Capping chunks from ${relevantResults.length} to ${MAX_CHUNKS} to prevent context stuffing`);
+        relevantResults = relevantResults.slice(0, MAX_CHUNKS);
+      }
+
+      console.log(`📚 Retrieved ${relevantResults.length}/${relevantDocs.length} chunks (threshold: ${dynamicThreshold.toFixed(3)}, top: ${topScore.toFixed(3)})`)
+    }
 
     // Build context from relevant documents
     const context = relevantResults

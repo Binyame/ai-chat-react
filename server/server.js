@@ -533,23 +533,42 @@ app.use('*', (_req, res) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server with automatic port handling
+const server = app.listen(PORT, () => {
   console.log(`🚀 AI Chat Backend running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);
-  
+
   // Check API key configuration
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
   const hasHuggingFace = !!process.env.HUGGINGFACE_TOKEN;
   const hasGemini = !!process.env.GEMINI_API_KEY;
-  
+
   console.log('🔑 API Keys configured:');
   console.log(`   OpenAI: ${hasOpenAI ? '✅' : '❌'}`);
   console.log(`   Hugging Face: ${hasHuggingFace ? '✅' : '❌'}`);
   console.log(`   Gemini: ${hasGemini ? '✅' : '❌'}`);
-  
+
   if (!hasOpenAI && !hasHuggingFace && !hasGemini) {
     console.warn('⚠️  No API keys configured. Please check your .env file.');
+  }
+});
+
+// Handle port already in use error
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.log(`⚠️  Port ${PORT} is already in use. Attempting to use next available port...`);
+
+    // Try next port
+    const nextPort = parseInt(PORT) + 1;
+    console.log(`🔄 Trying port ${nextPort}...`);
+
+    app.listen(nextPort, () => {
+      console.log(`✅ Server started on port ${nextPort} instead`);
+      console.log(`📍 Health check: http://localhost:${nextPort}/health`);
+      console.log(`⚠️  Update your frontend .env: VITE_API_BASE_URL=http://localhost:${nextPort}/api`);
+    });
+  } else {
+    throw error;
   }
 });
