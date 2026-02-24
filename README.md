@@ -26,6 +26,7 @@ A React application that demonstrates retrieval-augmented generation (RAG) for d
 5. **LLM Provider Flexibility** - Integrated OpenAI, Gemini, and Hugging Face with a common interface. Initially tried using Gemini embeddings for cost savings, but LangChain's v2.1.20 didn't support their embedding API properly (404 errors), so I stuck with OpenAI embeddings and used Gemini only for chat completions where it worked reliably.
 
 6. **Hallucination Prevention** - Multi-layer approach to ensure answers stay grounded in source documents:
+   - **Two-phase retrieval**: Initially retrieves top-4 candidates (topK=4), then filters to 2-6 final chunks based on dynamic threshold—prevents context stuffing while ensuring sufficient evidence
    - **Similarity score filtering** (safe retrieval gate): Uses `similaritySearchWithScore` with dynamic threshold—keeps chunks within 70% of top score, adapting to different embedding models without hardcoded values
    - **Explicit "not found" short-circuit**: If top score < 0.3, return "not found in documents" immediately without calling the LLM, eliminating hallucination in zero-evidence cases
    - **Strict grounding prompt**: System instructions enforce answer only from provided context, otherwise respond "not found," and always cite sources using `[1]`, `[2]` notation
