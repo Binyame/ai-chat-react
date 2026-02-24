@@ -20,6 +20,10 @@ import {
   List,
   ListItem,
   ListItemText,
+  Collapse,
+  Skeleton,
+  Fade,
+  Zoom,
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -27,6 +31,9 @@ import {
   Description as DescriptionIcon,
   Delete as DeleteIcon,
   Folder as FolderIcon,
+  ExpandMore as ExpandMoreIcon,
+  CloudUpload as CloudUploadIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 
 interface Message {
@@ -40,6 +47,7 @@ interface Citation {
   fileName: string;
   page: string | number;
   text: string;
+  relevance?: string;
 }
 
 interface Namespace {
@@ -60,6 +68,9 @@ export default function RAGChatComponent() {
   const [namespaces, setNamespaces] = useState<Namespace[]>([]);
   const [selectedNamespace, setSelectedNamespace] = useState('default');
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [expandedCitations, setExpandedCitations] = useState<Set<string>>(new Set());
+  const [showCitations, setShowCitations] = useState<Set<number>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -218,18 +229,128 @@ export default function RAGChatComponent() {
     }
   };
 
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      const file = files[0];
+      if (file.type === 'application/pdf') {
+        // Trigger upload with the dropped file
+        const fakeEvent = {
+          target: { files: [file] }
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
+        handleFileUpload(fakeEvent);
+      } else {
+        setError('Please upload a PDF file');
+      }
+    }
+  };
+
+  const toggleCitation = (messageIndex: number, citationId: number) => {
+    const key = `${messageIndex}-${citationId}`;
+    setExpandedCitations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleCitationsVisibility = (messageIndex: number) => {
+    setShowCitations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageIndex)) {
+        newSet.delete(messageIndex);
+      } else {
+        newSet.add(messageIndex);
+      }
+      return newSet;
+    });
+  };
+
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 2 }}>
+    <Box sx={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden'
+    }}>
       {/* Header */}
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" gutterBottom>
-          RAG Chat with Citations
-        </Typography>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, pt: { xs: 2, md: 3 }, pb: 1 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+          <AutoAwesomeIcon color="primary" />
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            RAG Chat with Citations
+          </Typography>
+        </Stack>
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          Upload PDFs and ask questions. Answers will include citations to source documents.
+          Upload PDFs and ask questions. Answers include citations with relevance scores.
         </Typography>
 
-        {/* Namespace selector and upload */}
+        {/* Drag and Drop Upload Zone */}
+        <Box
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+          sx={{
+            mt: 2,
+            p: 3,
+            border: '2px dashed',
+            borderColor: dragActive ? 'primary.main' : 'divider',
+            borderRadius: 2,
+            bgcolor: dragActive ? 'action.hover' : 'background.paper',
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              borderColor: 'primary.main',
+              bgcolor: 'action.hover',
+            },
+          }}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
+
+          <CloudUploadIcon
+            sx={{
+              fontSize: 48,
+              color: dragActive ? 'primary.main' : 'text.secondary',
+              mb: 1,
+              transition: 'color 0.2s ease'
+            }}
+          />
+          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+            {uploading ? 'Processing...' : 'Drop PDF here or click to browse'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Supports PDF files up to 50MB
+          </Typography>
+        </Box>
+
+        {/* Namespace selector and manage button */}
         <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 2 }}>
           <TextField
             select
@@ -248,25 +369,9 @@ export default function RAGChatComponent() {
             ))}
           </TextField>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileUpload}
-            style={{ display: 'none' }}
-          />
-
-          <Button
-            variant="contained"
-            startIcon={uploading ? <CircularProgress size={20} /> : <UploadIcon />}
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-          >
-            Upload PDF
-          </Button>
-
           <Button
             variant="outlined"
+            size="small"
             startIcon={<FolderIcon />}
             onClick={() => setManageDialogOpen(true)}
           >
@@ -294,79 +399,233 @@ export default function RAGChatComponent() {
         )}
       </Box>
 
-      <Divider sx={{ mb: 2 }} />
+      <Divider />
 
       {/* Messages */}
-      <Box sx={{ flexGrow: 1, overflow: 'auto', mb: 2 }}>
+      <Box sx={{ flexGrow: 1, overflow: 'auto', px: { xs: 2, sm: 3, md: 4 }, py: 2 }}>
         {messages.length === 0 ? (
-          <Box sx={{ textAlign: 'center', mt: 4, color: 'text.secondary' }}>
-            <DescriptionIcon sx={{ fontSize: 60, mb: 2, opacity: 0.3 }} />
-            <Typography variant="h6">No messages yet</Typography>
-            <Typography variant="body2">
-              Upload a PDF document and start asking questions about it
-            </Typography>
-          </Box>
-        ) : (
-          messages.map((message, index) => (
-            <Paper
-              key={index}
+          <Fade in timeout={500}>
+            <Box
               sx={{
-                p: 2,
-                mb: 2,
-                bgcolor: message.role === 'user' ? 'primary.main' : 'background.paper',
-                color: message.role === 'user' ? 'primary.contrastText' : 'text.primary',
-                ml: message.role === 'user' ? 'auto' : 0,
-                mr: message.role === 'user' ? 0 : 'auto',
-                maxWidth: '80%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                textAlign: 'center',
+                color: 'text.secondary',
               }}
             >
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: 'inherit' }}>
-                {message.role === 'user' ? 'You' : 'AI Assistant'}
-              </Typography>
-              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', color: 'inherit' }}>
-                {message.content}
-              </Typography>
-
-              {/* Citations */}
-              {message.citations && message.citations.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Divider sx={{ mb: 1 }} />
-                  <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', mb: 1 }}>
-                    Sources:
+              <Zoom in timeout={800}>
+                <Box
+                  sx={{
+                    p: 4,
+                    borderRadius: 3,
+                    bgcolor: 'action.hover',
+                    maxWidth: 500,
+                  }}
+                >
+                  <DescriptionIcon sx={{ fontSize: 80, mb: 2, opacity: 0.5, color: 'primary.main' }} />
+                  <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+                    Welcome to RAG Chat
                   </Typography>
-                  {message.citations.map((citation) => (
-                    <Card key={citation.id} variant="outlined" sx={{ mb: 1, bgcolor: 'action.hover' }}>
-                      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                          <Chip label={`[${citation.id}]`} size="small" color="primary" />
-                          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                            {citation.fileName}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Page {citation.page}
-                          </Typography>
-                        </Stack>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                          {citation.text}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                    Upload PDF documents and ask questions to get AI-powered answers with citations
+                  </Typography>
+                  <Stack spacing={1} alignItems="flex-start" sx={{ textAlign: 'left', mx: 'auto', maxWidth: 400 }}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Typography sx={{ fontWeight: 600 }}>1.</Typography>
+                      <Typography>Drop a PDF or click the upload zone above</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Typography sx={{ fontWeight: 600 }}>2.</Typography>
+                      <Typography>Ask questions about the content</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Typography sx={{ fontWeight: 600 }}>3.</Typography>
+                      <Typography>Get answers with source citations and relevance scores</Typography>
+                    </Box>
+                  </Stack>
                 </Box>
-              )}
-            </Paper>
+              </Zoom>
+            </Box>
+          </Fade>
+        ) : (
+          messages.map((message, index) => (
+            <Fade in key={index} timeout={300}>
+              <Paper
+                elevation={message.role === 'user' ? 0 : 1}
+                sx={{
+                  p: 2.5,
+                  mb: 2,
+                  bgcolor: message.role === 'user' ? 'primary.main' : 'background.paper',
+                  color: message.role === 'user' ? 'primary.contrastText' : 'text.primary',
+                  ml: message.role === 'user' ? 'auto' : 0,
+                  mr: message.role === 'user' ? 0 : 'auto',
+                  maxWidth: '80%',
+                  borderRadius: 2,
+                  boxShadow: message.role === 'user'
+                    ? '0 2px 8px rgba(0,0,0,0.15)'
+                    : '0 1px 3px rgba(0,0,0,0.08)',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: message.role === 'user'
+                      ? '0 4px 12px rgba(0,0,0,0.2)'
+                      : '0 2px 8px rgba(0,0,0,0.12)',
+                  },
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'inherit' }}>
+                    {message.role === 'user' ? 'You' : 'AI Assistant'}
+                  </Typography>
+                  {message.role === 'assistant' && (
+                    <Chip label="RAG" size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                  )}
+                </Stack>
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', color: 'inherit', lineHeight: 1.6 }}>
+                  {message.content}
+                </Typography>
+
+                {/* Citations */}
+                {message.citations && message.citations.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Divider sx={{ mb: 1.5, borderColor: 'divider' }} />
+                    <Box
+                      onClick={() => toggleCitationsVisibility(index)}
+                      sx={{
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        p: 1,
+                        borderRadius: 1,
+                        bgcolor: 'action.hover',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          bgcolor: 'action.selected',
+                        },
+                      }}
+                    >
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                          {showCitations.has(index) ? 'Hide citations' : `View ${message.citations.length} citation${message.citations.length > 1 ? 's' : ''}`}
+                        </Typography>
+                        <Chip label={message.citations.length} size="small" color="primary" sx={{ height: 20 }} />
+                      </Stack>
+                      <IconButton
+                        size="small"
+                        sx={{
+                          transform: showCitations.has(index) ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.3s ease',
+                        }}
+                      >
+                        <ExpandMoreIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                    <Collapse in={showCitations.has(index)} timeout={300}>
+                      <Box sx={{ mt: 1.5 }}>
+                        {message.citations.map((citation) => {
+                          const citationKey = `${index}-${citation.id}`;
+                          const isExpanded = expandedCitations.has(citationKey);
+
+                          return (
+                            <Card
+                              key={citation.id}
+                              variant="outlined"
+                              sx={{
+                                mb: 1,
+                                bgcolor: 'background.default',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  bgcolor: 'action.hover',
+                                  boxShadow: 1,
+                                },
+                              }}
+                            >
+                              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                <Box
+                                  onClick={() => toggleCitation(index, citation.id)}
+                                  sx={{
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                  }}
+                                >
+                                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                    <Chip label={`[${citation.id}]`} size="small" color="primary" />
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      {citation.fileName}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      Page {citation.page}
+                                    </Typography>
+                                    {citation.relevance && (
+                                      <Chip
+                                        label={`Score: ${citation.relevance}`}
+                                        size="small"
+                                        variant="outlined"
+                                        color={parseFloat(citation.relevance) > 0.7 ? 'success' : 'default'}
+                                        sx={{ height: 20, fontSize: '0.7rem' }}
+                                      />
+                                    )}
+                                  </Stack>
+                                  <IconButton
+                                    size="small"
+                                    sx={{
+                                      transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                      transition: 'transform 0.3s ease',
+                                    }}
+                                  >
+                                    <ExpandMoreIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                                <Collapse in={isExpanded} timeout={300}>
+                                  <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                      {citation.text}
+                                    </Typography>
+                                  </Box>
+                                </Collapse>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </Box>
+                    </Collapse>
+                  </Box>
+                )}
+              </Paper>
+            </Fade>
           ))
         )}
         {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-            <CircularProgress />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}>
+            <Skeleton variant="circular" width={40} height={40} />
+            <Box sx={{ flex: 1 }}>
+              <Skeleton variant="text" width="60%" height={30} />
+              <Skeleton variant="text" width="80%" />
+              <Skeleton variant="text" width="70%" />
+            </Box>
           </Box>
         )}
         <div ref={messagesEndRef} />
       </Box>
 
       {/* Input */}
-      <Box sx={{ display: 'flex', gap: 1 }}>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, pb: { xs: 2, md: 3 }, pt: 1 }}>
+        <Paper
+          elevation={3}
+          sx={{
+            p: 1.5,
+            display: 'flex',
+            gap: 1,
+            bgcolor: 'background.paper',
+            borderRadius: 2,
+          }}
+        >
         <TextField
           fullWidth
           multiline
@@ -376,16 +635,31 @@ export default function RAGChatComponent() {
           onKeyPress={handleKeyPress}
           placeholder="Ask a question about your documents..."
           disabled={loading}
+          variant="outlined"
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              bgcolor: 'background.default',
+            },
+          }}
         />
         <Button
           variant="contained"
           onClick={handleSendMessage}
           disabled={loading || !input.trim()}
-          sx={{ minWidth: 100 }}
-          endIcon={<SendIcon />}
+          sx={{
+            minWidth: 100,
+            height: 56,
+            borderRadius: 2,
+            boxShadow: 2,
+            '&:hover': {
+              boxShadow: 4,
+            },
+          }}
+          endIcon={loading ? null : <SendIcon />}
         >
-          Send
+          {loading ? <CircularProgress size={24} color="inherit" /> : 'Send'}
         </Button>
+      </Paper>
       </Box>
 
       {/* Manage Collections Dialog */}

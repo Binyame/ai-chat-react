@@ -17,8 +17,6 @@ import { ChatProvider } from './contexts/ChatContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import SessionManager from './components/SessionManager'
 import ChatComponent from './components/ChatComponent'
-import MockChatComponent from './components/MockChatComponent'
-import HuggingFaceChatComponent from './components/HuggingFaceChatComponent'
 import GeminiChatComponent from './components/GeminiChatComponent'
 import RAGChatComponent from './components/RAGChatComponent'
 
@@ -58,14 +56,14 @@ function App() {
       <ChatProvider>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
+          <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
             height: '100vh',
             overflow: 'hidden'
           }}>
           <AppBar position="static">
-            <Toolbar>
+            <Toolbar sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
               <IconButton
                 edge="start"
                 color="inherit"
@@ -86,9 +84,9 @@ function App() {
               </IconButton>
             </Toolbar>
           </AppBar>
-          
-          <Box sx={{ 
-            borderBottom: 1, 
+
+          <Box sx={{
+            borderBottom: 1,
             borderColor: 'divider'
           }}>
             <Tabs
@@ -97,31 +95,28 @@ function App() {
               aria-label="chat provider tabs"
               variant="scrollable"
               scrollButtons="auto"
+              sx={{ px: { xs: 2, sm: 3, md: 4 } }}
             >
-              <Tab label="Mock (Local)" />
-              <Tab label="OpenAI API" />
-              <Tab label="Hugging Face" />
-              <Tab label="Gemini API" />
               <Tab label="RAG with PDFs" />
+              <Tab label="OpenAI Chat" />
+              <Tab label="Gemini Chat" />
             </Tabs>
           </Box>
-          
+
           <Box sx={{
             flexGrow: 1,
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            {activeTab === 0 && <MockChatComponent />}
+            {activeTab === 0 && <RAGChatComponent />}
             {activeTab === 1 && <ChatComponent />}
-            {activeTab === 2 && <HuggingFaceChatComponent />}
-            {activeTab === 3 && <GeminiChatComponent />}
-            {activeTab === 4 && <RAGChatComponent />}
+            {activeTab === 2 && <GeminiChatComponent />}
           </Box>
-          
-          <SessionManager 
-            open={sessionManagerOpen} 
-            onClose={() => setSessionManagerOpen(false)} 
+
+          <SessionManager
+            open={sessionManagerOpen}
+            onClose={() => setSessionManagerOpen(false)}
           />
           </Box>
         </ThemeProvider>
