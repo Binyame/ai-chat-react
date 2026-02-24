@@ -14,7 +14,8 @@ test.describe('App Navigation', () => {
     // Click on OpenAI Chat tab
     await page.click('text=OpenAI Chat');
     await expect(page.getByText('Direct chat with')).toBeVisible();
-    await expect(page.getByText('GPT-3.5 Turbo')).toBeVisible();
+    // Use getByRole to target the alert specifically (avoids duplicate text in welcome message)
+    await expect(page.getByRole('alert').getByText('GPT-3.5 Turbo')).toBeVisible();
 
     // Click on Gemini Chat tab
     await page.click('text=Gemini Chat');

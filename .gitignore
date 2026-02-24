@@ -48,6 +48,18 @@ test-*.js
 *.temp
 debug-*.js
 
+# Test directories and reports
+src/tests/
+e2e/
+test-results/
+playwright-report/
+.playwright/
+coverage/
+vitest.config.ts
+playwright.config.ts
+TESTING.md
+TEST_SUMMARY.md
+
 # Documentation - Marketing/Notes (keep local only)
 FEATURES.md
 PITCH.md
