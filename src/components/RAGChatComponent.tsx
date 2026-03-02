@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { useChatContext } from '../contexts/ChatContext';
+import { Message, Citation } from '../types';
 import {
   Box,
   TextField,
@@ -27,7 +29,6 @@ import {
 } from '@mui/material';
 import {
   Send as SendIcon,
-  Upload as UploadIcon,
   Description as DescriptionIcon,
   Delete as DeleteIcon,
   Folder as FolderIcon,
@@ -35,20 +36,6 @@ import {
   CloudUpload as CloudUploadIcon,
   AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  citations?: Citation[];
-}
-
-interface Citation {
-  id: number;
-  fileName: string;
-  page: string | number;
-  text: string;
-  relevance?: string;
-}
 
 interface Namespace {
   name: string;
@@ -58,7 +45,10 @@ interface Namespace {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 export default function RAGChatComponent() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { state, addMessage, createSession } = useChatContext();
+
+  // Use session messages if available, otherwise empty
+  const messages = state.currentSession?.messages || [];
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -85,6 +75,11 @@ export default function RAGChatComponent() {
 
   useEffect(() => {
     loadNamespaces();
+
+    // Create a session if none exists
+    if (!state.currentSession) {
+      createSession('rag', 'RAG Chat');
+    }
   }, []);
 
   const loadNamespaces = async () => {
@@ -160,7 +155,8 @@ export default function RAGChatComponent() {
       content: input,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // Add user message to session
+    addMessage(userMessage);
     setInput('');
     setLoading(true);
     setError(null);
@@ -172,7 +168,7 @@ export default function RAGChatComponent() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          question: input,
+          question: userMessage.content,
           namespace: selectedNamespace,
           topK: 4,
         }),
@@ -186,7 +182,8 @@ export default function RAGChatComponent() {
           content: data.answer,
           citations: data.citations,
         };
-        setMessages((prev) => [...prev, assistantMessage]);
+        // Add assistant message to session
+        addMessage(assistantMessage);
       } else {
         setError(data.error || 'Failed to get response');
       }

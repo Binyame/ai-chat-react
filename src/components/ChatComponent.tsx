@@ -18,17 +18,28 @@ import {
   Chat as ChatIcon
 } from '@mui/icons-material';
 import { Message } from '../types';
+import { useChatContext } from '../contexts/ChatContext';
 import { sendMessageToOpenAI } from '../services/apiService';
 import { canMakeRequest, getTimeRemaining } from '../utils/helpers';
 
 const ChatComponent: React.FC = () => {
+  const { state, addMessage, createSession } = useChatContext();
   const [input, setInput] = useState('');
-  const [chatLog, setChatLog] = useState<Message[]>([]);
+
+  // Use session messages if available
+  const chatLog = state.currentSession?.messages || [];
   const [loading, setLoading] = useState(false);
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   
   const MIN_REQUEST_INTERVAL = 10000; // 10 seconds minimum between requests
+
+  // Create session if none exists
+  useEffect(() => {
+    if (!state.currentSession) {
+      createSession('openai', 'OpenAI Chat');
+    }
+  }, []);
 
   // Timer for cooldown display
   useEffect(() => {
@@ -37,7 +48,7 @@ const ChatComponent: React.FC = () => {
     const timer = setInterval(() => {
       const remaining = getTimeRemaining(lastRequestTime, MIN_REQUEST_INTERVAL);
       setTimeRemaining(remaining);
-      
+
       if (remaining <= 0) {
         clearInterval(timer);
       }
@@ -51,37 +62,38 @@ const ChatComponent: React.FC = () => {
 
     // Check if we're allowed to make a request yet
     if (!canMakeRequest(lastRequestTime, MIN_REQUEST_INTERVAL)) {
-      setChatLog(prev => [...prev, { 
-        role: 'assistant', 
-        content: `Please wait ${Math.ceil(getTimeRemaining(lastRequestTime, MIN_REQUEST_INTERVAL) / 1000)} seconds between requests to avoid rate limits.` 
-      }]);
+      addMessage({
+        role: 'assistant',
+        content: `Please wait ${Math.ceil(getTimeRemaining(lastRequestTime, MIN_REQUEST_INTERVAL) / 1000)} seconds between requests to avoid rate limits.`
+      });
       return;
     }
 
     // Set loading state
     setLoading(true);
 
-    // Add user message to chat log immediately
-    setChatLog(prev => [...prev, { role: 'user', content: message }]);
+    // Add user message to session
+    const userMessage: Message = { role: 'user', content: message };
+    addMessage(userMessage);
 
     try {
       // Update last request time
       setLastRequestTime(Date.now());
       setTimeRemaining(MIN_REQUEST_INTERVAL);
-      
+
       // Send message to OpenAI API
-      const response = await sendMessageToOpenAI([...chatLog, { role: 'user', content: message }]);
+      const response = await sendMessageToOpenAI([...chatLog, userMessage]);
 
       if (response.success) {
-        // Update chat log with the assistant's response
-        setChatLog(prev => [...prev, { role: 'assistant', content: response.data }]);
+        // Add assistant's response to session
+        addMessage({ role: 'assistant', content: response.data || '' });
       } else {
         // Show error in chat
-        setChatLog(prev => [...prev, { 
-          role: 'assistant', 
+        addMessage({
+          role: 'assistant',
           content: `Error: ${response.error || 'Unknown error'}`
-        }]);
-        
+        });
+
         // If rate limited, implement a longer cooldown
         if (response.error?.includes('429')) {
           setTimeRemaining(60000); // 1 minute cooldown after rate limit hit
@@ -89,10 +101,10 @@ const ChatComponent: React.FC = () => {
       }
     } catch {
       // Handle and display the error
-      setChatLog(prev => [...prev, { 
-        role: 'assistant', 
+      addMessage({
+        role: 'assistant',
         content: 'An error occurred while generating a response.'
-      }]);
+      });
     } finally {
       setLoading(false);
     }

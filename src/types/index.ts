@@ -1,9 +1,18 @@
-export interface Message {
+export interface Citation {
+    id: number;
+    fileName: string;
+    page: string | number;
+    text: string;
+    relevance?: string;
+  }
+
+  export interface Message {
     id?: string;
     role: 'user' | 'assistant';
     content: string;
     timestamp?: string;
     provider?: string;
+    citations?: Citation[];
   }
   
   export interface ApiResponse {
@@ -12,4 +21,4 @@ export interface Message {
     error?: string;
   }
   
-  export type ApiProviderType = 'openai' | 'huggingface' | 'mock';
+  export type ApiProviderType = 'rag' | 'openai' | 'gemini';

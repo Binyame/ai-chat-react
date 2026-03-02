@@ -42,7 +42,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ open, onClose }) => {
   const { state, createSession, loadSession, deleteSession, clearCurrentSession } = useChatContext();
   const [newSessionDialog, setNewSessionDialog] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
-  const [newSessionProvider, setNewSessionProvider] = useState<ApiProviderType>('mock');
+  const [newSessionProvider, setNewSessionProvider] = useState<ApiProviderType>('rag');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -110,8 +110,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ open, onClose }) => {
 
   const getProviderColor = (provider: string) => {
     switch (provider) {
+      case 'rag': return 'primary';
       case 'openai': return 'success';
-      case 'huggingface': return 'warning';
       case 'gemini': return 'info';
       default: return 'default';
     }
@@ -282,7 +282,12 @@ const SessionManager: React.FC<SessionManagerProps> = ({ open, onClose }) => {
       </Menu>
 
       {/* New Session Dialog */}
-      <Dialog open={newSessionDialog} onClose={() => setNewSessionDialog(false)}>
+      <Dialog
+        open={newSessionDialog}
+        onClose={() => setNewSessionDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Create New Chat Session</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
@@ -291,29 +296,86 @@ const SessionManager: React.FC<SessionManagerProps> = ({ open, onClose }) => {
               label="Session Name (optional)"
               value={newSessionName}
               onChange={(e) => setNewSessionName(e.target.value)}
-              sx={{ mb: 2 }}
-              placeholder="e.g., Project Planning, Code Review"
+              sx={{ mb: 3 }}
+              placeholder="e.g., Research Notes, Code Review, Project Planning"
+              helperText="Give your conversation a memorable name to find it later"
             />
-            
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              AI Provider
+
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              Select AI Provider
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {(['mock', 'openai', 'huggingface', 'gemini'] as ApiProviderType[]).map((provider) => (
-                <Chip
-                  key={provider}
-                  label={provider.charAt(0).toUpperCase() + provider.slice(1)}
-                  clickable
-                  color={newSessionProvider === provider ? 'primary' : 'default'}
-                  onClick={() => setNewSessionProvider(provider)}
-                />
+            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
+              Choose which AI model to use for this conversation
+            </Typography>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {[
+                {
+                  id: 'rag' as ApiProviderType,
+                  name: 'RAG with PDFs',
+                  description: 'Upload documents and ask questions with cited answers',
+                  color: 'primary' as const
+                },
+                {
+                  id: 'openai' as ApiProviderType,
+                  name: 'OpenAI Chat',
+                  description: 'GPT-3.5/4 - Best for general chat and coding tasks',
+                  color: 'success' as const
+                },
+                {
+                  id: 'gemini' as ApiProviderType,
+                  name: 'Gemini Chat',
+                  description: 'Advanced reasoning and analysis capabilities',
+                  color: 'info' as const
+                }
+              ].map((provider) => (
+                <Box
+                  key={provider.id}
+                  onClick={() => setNewSessionProvider(provider.id)}
+                  sx={{
+                    p: 2,
+                    border: 2,
+                    borderColor: newSessionProvider === provider.id ? 'primary.main' : 'divider',
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    bgcolor: newSessionProvider === provider.id ? 'primary.50' : 'transparent',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      borderColor: 'primary.light',
+                      bgcolor: 'action.hover'
+                    }
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Chip
+                      label={provider.name}
+                      size="small"
+                      color={provider.color}
+                    />
+                    {newSessionProvider === provider.id && (
+                      <Typography variant="caption" color="primary" fontWeight="bold">
+                        ✓ Selected
+                      </Typography>
+                    )}
+                  </Box>
+                  <Typography variant="caption" color="textSecondary">
+                    {provider.description}
+                  </Typography>
+                </Box>
               ))}
             </Box>
+
+            <Alert severity="info" sx={{ mt: 3 }}>
+              <Typography variant="caption">
+                <strong>Tip:</strong> Sessions let you organize conversations by topic or project.
+                You can switch between them anytime from the session menu.
+              </Typography>
+            </Alert>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setNewSessionDialog(false)}>Cancel</Button>
-          <Button onClick={handleCreateSession} variant="contained">
+          <Button onClick={handleCreateSession} variant="contained" size="large">
             Create Session
           </Button>
         </DialogActions>

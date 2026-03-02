@@ -1,0 +1,10 @@
+# Elastic Beanstalk ignore file
+# Exclude unnecessary files from deployment package
+
+node_modules/
+test-*.js
+*.md
+.env
+.env.*
+uploads/*
+!uploads/.gitkeep

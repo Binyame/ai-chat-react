@@ -20,22 +20,15 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
-
-// Types for messages
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-// More explicit types for the component props
-// interface MarkdownLinkProps {
-//   children: React.ReactNode;
-//   href?: string;
-// }
+import { Message } from '../types';
+import { useChatContext } from '../contexts/ChatContext';
 
 const GeminiChatComponent: React.FC = () => {
+  const { state, addMessage, createSession } = useChatContext();
   const [input, setInput] = useState('');
-  const [chatLog, setChatLog] = useState<Message[]>([]);
+
+  // Use session messages if available
+  const chatLog = state.currentSession?.messages || [];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
@@ -43,6 +36,13 @@ const GeminiChatComponent: React.FC = () => {
   // The model we'll use - gemini-2.5-flash is the current fast model for v1beta API (2026)
   const MODEL_NAME = "gemini-2.5-flash";
   
+  // Create session if none exists
+  useEffect(() => {
+    if (!state.currentSession) {
+      createSession('gemini', 'Gemini Chat');
+    }
+  }, []);
+
   // Check if API key is available
   useEffect(() => {
     const checkApiKey = async () => {
@@ -101,8 +101,8 @@ const GeminiChatComponent: React.FC = () => {
     // Set loading state
     setLoading(true);
 
-    // Add user message to chat log immediately
-    setChatLog(prev => [...prev, { role: 'user', content: message }]);
+    // Add user message to session
+    addMessage({ role: 'user', content: message });
 
     try {
       // Make API call to Gemini with the recommended model (using v1 stable endpoint)
@@ -146,7 +146,8 @@ const GeminiChatComponent: React.FC = () => {
       }
       
       // Add assistant's response to chat log
-      setChatLog(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
+      // Add assistant message to session
+      addMessage({ role: 'assistant', content: assistantMessage });
     } catch (error) {
       console.error('API Error:', error);
       
@@ -174,17 +175,11 @@ const GeminiChatComponent: React.FC = () => {
         }
         
         setError(errorMessage);
-        setChatLog(prev => [...prev, { 
-          role: 'assistant', 
-          content: `Error: ${errorMessage}` 
-        }]);
+        addMessage({ role: 'assistant', content: `Error: ${errorMessage}` });
       } else {
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
         setError(`Error: ${errorMessage}`);
-        setChatLog(prev => [...prev, { 
-          role: 'assistant', 
-          content: `Error: ${errorMessage}` 
-        }]);
+        addMessage({ role: 'assistant', content: `Error: ${errorMessage}` });
       }
     } finally {
       setLoading(false);

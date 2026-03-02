@@ -124,6 +124,47 @@ npm run dev
 
 ---
 
+## 🚀 Deployment
+
+### AWS Deployment (Recommended)
+
+Deploy to AWS using **Elastic Beanstalk** (backend) and **S3 + CloudFront** (frontend):
+
+```bash
+# Quick start (10 minutes)
+# See AWS-QUICKSTART.md for step-by-step guide
+
+# Backend
+cd server && eb init && eb create ai-chat-backend-prod
+
+# Frontend
+npm run build
+aws s3 sync dist/ s3://your-bucket --delete
+```
+
+**Complete guides:**
+- 📘 **Quick Start**: [AWS-QUICKSTART.md](./AWS-QUICKSTART.md) - 10-minute deployment
+- 📕 **Full Guide**: [aws-deploy.md](./aws-deploy.md) - Detailed setup with CloudFront, Route 53, SSL
+- 🤖 **Automated**: Run `./deploy-aws.sh` for interactive deployment
+
+**AWS Services Used:**
+
+- Elastic Beanstalk (Node.js backend)
+- S3 + CloudFront (React frontend with CDN)
+- Secrets Manager (API key storage)
+- Certificate Manager (Free SSL)
+- Route 53 (Optional custom domain)
+
+**Cost**: ~$10/month (or FREE with AWS Free Tier for 12 months)
+
+### Alternative Platforms
+
+- **Vercel + Railway**: See [deployment guide](./aws-deploy.md#alternative-platforms)
+- **Render**: Full-stack on one platform
+- **Netlify + Railway**: Similar to Vercel
+
+---
+
 ## RAG Pipeline Usage
 
 1. Click the "RAG with PDFs" tab

@@ -42,7 +42,7 @@ type ChatAction =
 const initialState: ChatState = {
   currentSession: null,
   sessions: [],
-  activeProvider: 'mock',
+  activeProvider: 'rag',
   loading: false,
   error: null,
   settings: getAppSettings()
