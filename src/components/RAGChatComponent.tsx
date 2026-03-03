@@ -45,7 +45,7 @@ interface Namespace {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 export default function RAGChatComponent() {
-  const { state, addMessage, createSession } = useChatContext();
+  const { state, addMessage, loadOrCreateSessionForProvider } = useChatContext();
 
   // Use session messages if available, otherwise empty
   const messages = state.currentSession?.messages || [];
@@ -76,9 +76,9 @@ export default function RAGChatComponent() {
   useEffect(() => {
     loadNamespaces();
 
-    // Create a session if none exists
-    if (!state.currentSession) {
-      createSession('rag', 'RAG Chat');
+    // Load or create session for RAG when component mounts
+    if (!state.currentSession || state.currentSession.provider !== 'rag') {
+      loadOrCreateSessionForProvider('rag');
     }
   }, []);
 

@@ -24,7 +24,7 @@ import { Message } from '../types';
 import { useChatContext } from '../contexts/ChatContext';
 
 const GeminiChatComponent: React.FC = () => {
-  const { state, addMessage, createSession } = useChatContext();
+  const { state, addMessage, loadOrCreateSessionForProvider } = useChatContext();
   const [input, setInput] = useState('');
 
   // Use session messages if available
@@ -35,11 +35,11 @@ const GeminiChatComponent: React.FC = () => {
 
   // The model we'll use - gemini-2.5-flash is the current fast model for v1beta API (2026)
   const MODEL_NAME = "gemini-2.5-flash";
-  
-  // Create session if none exists
+
+  // Load or create session for Gemini when component mounts
   useEffect(() => {
-    if (!state.currentSession) {
-      createSession('gemini', 'Gemini Chat');
+    if (!state.currentSession || state.currentSession.provider !== 'gemini') {
+      loadOrCreateSessionForProvider('gemini');
     }
   }, []);
 

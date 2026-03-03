@@ -23,7 +23,7 @@ import { sendMessageToOpenAI } from '../services/apiService';
 import { canMakeRequest, getTimeRemaining } from '../utils/helpers';
 
 const ChatComponent: React.FC = () => {
-  const { state, addMessage, createSession } = useChatContext();
+  const { state, addMessage, loadOrCreateSessionForProvider } = useChatContext();
   const [input, setInput] = useState('');
 
   // Use session messages if available
@@ -31,13 +31,13 @@ const ChatComponent: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  
+
   const MIN_REQUEST_INTERVAL = 10000; // 10 seconds minimum between requests
 
-  // Create session if none exists
+  // Load or create session for OpenAI when component mounts
   useEffect(() => {
-    if (!state.currentSession) {
-      createSession('openai', 'OpenAI Chat');
+    if (!state.currentSession || state.currentSession.provider !== 'openai') {
+      loadOrCreateSessionForProvider('openai');
     }
   }, []);
 

@@ -90,7 +90,7 @@ export const generateSessionId = (): string => {
 export const createNewSession = (provider: string, name?: string): ChatSession => {
   const id = generateSessionId();
   const timestamp = new Date().toISOString();
-  
+
   return {
     id,
     name: name || `${provider} Chat - ${new Date().toLocaleDateString()}`,
@@ -99,6 +99,28 @@ export const createNewSession = (provider: string, name?: string): ChatSession =
     createdAt: timestamp,
     updatedAt: timestamp
   };
+};
+
+// Get the most recent session for a specific provider
+export const getMostRecentSessionForProvider = (provider: string): ChatSession | null => {
+  try {
+    const sessions = getChatSessions();
+    const providerSessions = sessions.filter(s => s.provider === provider);
+
+    if (providerSessions.length === 0) {
+      return null;
+    }
+
+    // Sort by updatedAt and return the most recent
+    const sorted = providerSessions.sort((a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+
+    return sorted[0];
+  } catch (error) {
+    console.error('Failed to get most recent session for provider:', error);
+    return null;
+  }
 };
 
 // Settings management

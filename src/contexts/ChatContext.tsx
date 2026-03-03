@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { Message, ApiProviderType } from '../types';
-import { 
-  ChatSession, 
-  saveChatSession, 
-  getChatSession, 
-  getCurrentSessionId, 
+import {
+  ChatSession,
+  saveChatSession,
+  getChatSession,
+  getCurrentSessionId,
   setCurrentSessionId,
   createNewSession,
   getChatSessions,
   deleteChatSession,
   cleanupOldSessions,
+  getMostRecentSessionForProvider,
   AppSettings,
   getAppSettings,
   saveAppSettings
@@ -134,6 +135,7 @@ interface ChatContextType {
   saveCurrentSession: () => void;
   clearCurrentSession: () => void;
   updateSettings: (settings: Partial<AppSettings>) => void;
+  loadOrCreateSessionForProvider: (provider: ApiProviderType) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -240,6 +242,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     dispatch({ type: 'UPDATE_SETTINGS', payload: settings });
   };
 
+  const loadOrCreateSessionForProvider = (provider: ApiProviderType) => {
+    // First, try to find the most recent session for this provider
+    const existingSession = getMostRecentSessionForProvider(provider);
+
+    if (existingSession) {
+      // Load the existing session
+      dispatch({ type: 'SET_CURRENT_SESSION', payload: existingSession });
+    } else {
+      // Create a new session for this provider
+      dispatch({ type: 'CREATE_NEW_SESSION', payload: { provider } });
+    }
+  };
+
   const contextValue: ChatContextType = {
     state,
     dispatch,
@@ -252,7 +267,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     deleteSession,
     saveCurrentSession,
     clearCurrentSession,
-    updateSettings
+    updateSettings,
+    loadOrCreateSessionForProvider
   };
 
   return (
