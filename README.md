@@ -1,11 +1,13 @@
 # AI Chat with RAG Pipeline
 
-A React application that demonstrates retrieval-augmented generation (RAG) for document Q&A. Upload PDFs, ask questions, and get AI-generated answers with source citations.
+A production-ready React application that demonstrates retrieval-augmented generation (RAG) for document Q&A with multiple AI providers. Upload PDFs, ask questions, and get AI-generated answers with source citations.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![LangChain](https://img.shields.io/badge/🦜_LangChain-121212?style=flat)](https://js.langchain.com/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
+
+🔗 **[Live Demo](https://d3m7knm0s6dj1k.cloudfront.net)** - Deployed on AWS with CloudFront (HTTPS)
 
 ---
 
@@ -55,23 +57,65 @@ Chat sessions persist to localStorage with a TTL-based eviction policy (oldest f
 
 ---
 
+## Features
+
+✨ **Multi-Provider AI Chat**
+
+- RAG with PDF uploads and cited answers
+- OpenAI GPT-3.5 Turbo chat
+- Google Gemini 2.5 Flash chat
+
+🔄 **Session Management**
+
+- Per-provider session isolation
+- Persistent conversation history (localStorage)
+- Session switching without data loss
+- Export/import session history
+
+🛡️ **Anti-Hallucination Architecture**
+
+- Two-phase retrieval with dynamic thresholding
+- Explicit "not found" responses
+- Source citation with relevance scores
+- Context limits (2-6 chunks)
+
+☁️ **Production Deployment**
+
+- AWS Elastic Beanstalk (backend)
+- AWS S3 + CloudFront (frontend with HTTPS)
+- Environment variable management
+- CORS configuration
+
+---
+
 ## Tech Stack
 
 **Frontend:**
+
 - React 18 + TypeScript (strict mode)
 - Material-UI for component library
 - Vite for build tooling
+- React Context for state management
 
 **Backend:**
+
 - Node.js + Express
 - LangChain.js for RAG orchestration
 - Pinecone vector database (768-dim cosine similarity)
 - pdf-parse v1.1.1 for text extraction
 
 **AI Models:**
+
 - OpenAI `gpt-3.5-turbo` for answer generation
 - OpenAI `text-embedding-3-small` for vector embeddings (768 dims)
-- Google Gemini as alternate LLM provider
+- Google Gemini 2.5 Flash as alternate LLM provider
+
+**Infrastructure:**
+
+- AWS Elastic Beanstalk (Node.js 20 on Amazon Linux 2023)
+- AWS S3 (static website hosting)
+- AWS CloudFront (CDN with HTTPS)
+- Pinecone (serverless vector database)
 
 ---
 
@@ -126,57 +170,142 @@ npm run dev
 
 ## 🚀 Deployment
 
-### AWS Deployment (Recommended)
+### Live Production Deployment
+
+**🌐 Application URL:** https://d3m7knm0s6dj1k.cloudfront.net
+
+**Current Infrastructure:**
+
+- **Backend:** AWS Elastic Beanstalk (Node.js 20 on Amazon Linux 2023)
+  - Environment: `ai-chat-backend-prod`
+  - URL: <http://ai-chat-backend-prod.eba-fmvtu3u6.us-east-1.elasticbeanstalk.com>
+  - Region: us-east-1
+
+- **Frontend:** AWS S3 + CloudFront
+  - CloudFront Distribution: `E3P1COZJYAXZI8`
+  - S3 Bucket: `ai-chat-react-binyamseyoum-1772500915`
+  - HTTPS enabled with CloudFront default certificate
+
+**Features:**
+
+- ✅ HTTPS with CloudFront SSL
+- ✅ Gzip compression enabled
+- ✅ CDN caching (24-hour default)
+- ✅ Global edge locations
+- ✅ Automatic HTTP → HTTPS redirect
+- ✅ React Router support (404 → index.html)
+
+### Deploy Your Own
 
 Deploy to AWS using **Elastic Beanstalk** (backend) and **S3 + CloudFront** (frontend):
 
 ```bash
-# Quick start (10 minutes)
-# See AWS-QUICKSTART.md for step-by-step guide
+# Prerequisites
+pip3 install awsebcli --upgrade --user
+# or: brew install awsebcli
 
-# Backend
-cd server && eb init && eb create ai-chat-backend-prod
+# Backend Deployment
+cd server
+eb init --region us-east-1 --platform "Node.js 20"
+eb create your-app-backend --single --instance-type t3.micro
+eb setenv OPENAI_API_KEY="..." PINECONE_API_KEY="..." \
+         PINECONE_INDEX_NAME="..." NODE_ENV="production"
 
-# Frontend
+# Frontend Deployment
+cd ..
 npm run build
-aws s3 sync dist/ s3://your-bucket --delete
+BUCKET_NAME="your-app-$(whoami)-$(date +%s)"
+aws s3 mb s3://$BUCKET_NAME --region us-east-1
+aws s3 sync dist/ s3://$BUCKET_NAME --delete
+aws s3 website s3://$BUCKET_NAME --index-document index.html
+
+# CloudFront (optional, for HTTPS)
+aws cloudfront create-distribution --distribution-config '{...}'
 ```
 
 **Complete guides:**
-- 📘 **Quick Start**: [AWS-QUICKSTART.md](./AWS-QUICKSTART.md) - 10-minute deployment
-- 📕 **Full Guide**: [aws-deploy.md](./aws-deploy.md) - Detailed setup with CloudFront, Route 53, SSL
-- 🤖 **Automated**: Run `./deploy-aws.sh` for interactive deployment
+
+- 📘 [DEPLOYMENT-STEPS.md](./DEPLOYMENT-STEPS.md) - Step-by-step AWS deployment guide
+- 📕 [AWS-QUICKSTART.md](./AWS-QUICKSTART.md) - Quick 10-minute deployment
+- 🤖 [deploy-aws.sh](./deploy-aws.sh) - Automated deployment script
 
 **AWS Services Used:**
 
-- Elastic Beanstalk (Node.js backend)
-- S3 + CloudFront (React frontend with CDN)
-- Secrets Manager (API key storage)
-- Certificate Manager (Free SSL)
-- Route 53 (Optional custom domain)
+- Elastic Beanstalk (Node.js backend with auto-scaling)
+- S3 (static website hosting)
+- CloudFront (CDN with HTTPS/SSL)
+- Pinecone (vector database - external service)
 
-**Cost**: ~$10/month (or FREE with AWS Free Tier for 12 months)
+**Cost Estimate:**
+
+- Elastic Beanstalk (t3.micro): $8-10/month (FREE tier eligible)
+- S3 Storage + Requests: $0.10-0.50/month
+- CloudFront: $0-1/month (1TB free tier)
+- **Total:** ~$10/month (or **$0-5/month with AWS Free Tier**)
 
 ### Alternative Platforms
 
-- **Vercel + Railway**: See [deployment guide](./aws-deploy.md#alternative-platforms)
-- **Render**: Full-stack on one platform
-- **Netlify + Railway**: Similar to Vercel
+- **Vercel + Railway**: Frontend on Vercel, backend on Railway
+- **Render**: Full-stack deployment on one platform
+- **Netlify + Railway**: Similar to Vercel setup
+- **DigitalOcean App Platform**: All-in-one deployment
 
 ---
 
-## RAG Pipeline Usage
+## Usage
+
+### Session Management
+
+The application features a sophisticated session management system that preserves conversation history:
+
+**Key Features:**
+
+- **Per-Provider Sessions:** Each AI provider (RAG, OpenAI, Gemini) maintains its own session
+- **Automatic Restoration:** Switch between providers without losing conversation history
+- **localStorage Persistence:** Sessions survive page refreshes and browser restarts
+- **Session Switching:** Access previous conversations via the History sidebar (📋 icon)
+- **Export/Import:** Download sessions as JSON for backup or transfer
+
+**How It Works:**
+
+1. When you switch to a provider tab, the app checks for an existing session
+2. If found, it restores the most recent session for that provider
+3. If not found, it creates a new session
+4. All messages are automatically saved to localStorage after each exchange
+
+**Example:**
+
+```
+User Action                    → System Response
+────────────────────────────────────────────────────────
+Open OpenAI tab               → Loads/creates OpenAI session
+Ask "What is 2+2?"            → Saves to OpenAI session
+Switch to Gemini tab          → Loads/creates Gemini session
+Ask "What is 3+3?"            → Saves to Gemini session
+Switch back to OpenAI         → Restores OpenAI session (shows "What is 2+2?")
+Refresh page                  → All sessions still available
+```
+
+### RAG Pipeline Usage
 
 1. Click the "RAG with PDFs" tab
 2. Upload a PDF (parsed with pdf-parse, chunked automatically)
 3. Ask questions about the content
 4. Answers include `[1]`, `[2]` citations linking to source chunks
+5. View citation details by clicking on citation badges
 
 **How it works:**
+
 - PDF text → RecursiveCharacterTextSplitter (1000 chars, 200 overlap)
 - Chunks → OpenAI embeddings (768-dim vectors)
-- Vectors stored in Pinecone with file metadata
-- Query → similarity search (top-4 chunks) → LLM with context → cited answer
+- Vectors stored in Pinecone with file metadata (namespace support)
+- Query → similarity search (top-4 chunks) → dynamic filtering → LLM with context → cited answer
+
+**Namespace Management:**
+
+- Create separate namespaces for different document collections
+- Switch between namespaces to query different document sets
+- Delete namespaces and their vectors when no longer needed
 
 ---
 
