@@ -7,8 +7,6 @@ A production-ready React application that demonstrates retrieval-augmented gener
 [![LangChain](https://img.shields.io/badge/🦜_LangChain-121212?style=flat)](https://js.langchain.com/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
 
-🔗 **[Live Demo](https://d3m7knm0s6dj1k.cloudfront.net)** - Deployed on AWS with CloudFront (HTTPS)
-
 ---
 
 ## Technical Overview
@@ -39,8 +37,7 @@ A production-ready React application that demonstrates retrieval-augmented gener
 **What I'd do differently at scale:**
 - Implement semantic caching to avoid re-embedding identical documents
 - Add BM25 hybrid search alongside vector similarity (catches keyword matches vectors miss)
-- Use streaming responses for better UX on slower models
-- Deduplicate chunks from same document/page to increase context diversity
+- Add multi-file RAG (query across multiple PDFs simultaneously)
 
 ---
 
@@ -62,8 +59,15 @@ Chat sessions persist to localStorage with a TTL-based eviction policy (oldest f
 ✨ **Multi-Provider AI Chat**
 
 - RAG with PDF uploads and cited answers
-- OpenAI GPT-3.5 Turbo chat
-- Google Gemini 2.5 Flash chat
+- OpenAI GPT-4o Mini chat (with streaming)
+- Google Gemini 2.0 Flash chat (with streaming)
+- Hugging Face fallback models
+
+⚡ **Streaming Responses**
+
+- Tokens stream to the UI as they're generated
+- Blinking cursor while the model is typing
+- Works across OpenAI and Gemini providers
 
 🔄 **Session Management**
 
@@ -76,15 +80,16 @@ Chat sessions persist to localStorage with a TTL-based eviction policy (oldest f
 
 - Two-phase retrieval with dynamic thresholding
 - Explicit "not found" responses
-- Source citation with relevance scores
+- Source citations with relevance scores
+- Conversation memory for follow-up questions
 - Context limits (2-6 chunks)
+- Re-upload deduplication (replaces old vectors instead of stacking)
 
-☁️ **Production Deployment**
+📤 **PDF Upload**
 
-- AWS Elastic Beanstalk (backend)
-- AWS S3 + CloudFront (frontend with HTTPS)
-- Environment variable management
-- CORS configuration
+- Drag-and-drop or click to upload
+- Step-by-step progress bar (upload → parse → embed → store)
+- Namespace isolation for separate document collections
 
 ---
 
@@ -92,8 +97,8 @@ Chat sessions persist to localStorage with a TTL-based eviction policy (oldest f
 
 **Frontend:**
 
-- React 18 + TypeScript (strict mode)
-- Material-UI for component library
+- React 19 + TypeScript (strict mode)
+- Material-UI v7 for component library
 - Vite for build tooling
 - React Context for state management
 
@@ -106,15 +111,16 @@ Chat sessions persist to localStorage with a TTL-based eviction policy (oldest f
 
 **AI Models:**
 
-- OpenAI `gpt-3.5-turbo` for answer generation
+- OpenAI `gpt-4o-mini` for chat and RAG answer generation
 - OpenAI `text-embedding-3-small` for vector embeddings (768 dims)
-- Google Gemini 2.5 Flash as alternate LLM provider
+- Google Gemini `gemini-2.0-flash` as alternate LLM provider
+- Hugging Face inference models as fallback
 
 **Infrastructure:**
 
-- AWS Elastic Beanstalk (Node.js 20 on Amazon Linux 2023)
-- AWS S3 (static website hosting)
-- AWS CloudFront (CDN with HTTPS)
+- Deployable to AWS Elastic Beanstalk (backend) + S3/CloudFront (frontend)
+- Or Railway/Render/Vercel for lower-cost alternatives
+- Pinecone (serverless vector database)
 - Pinecone (serverless vector database)
 
 ---
@@ -169,31 +175,6 @@ npm run dev
 ---
 
 ## 🚀 Deployment
-
-### Live Production Deployment
-
-**🌐 Application URL:** https://d3m7knm0s6dj1k.cloudfront.net
-
-**Current Infrastructure:**
-
-- **Backend:** AWS Elastic Beanstalk (Node.js 20 on Amazon Linux 2023)
-  - Environment: `ai-chat-backend-prod`
-  - URL: <http://ai-chat-backend-prod.eba-fmvtu3u6.us-east-1.elasticbeanstalk.com>
-  - Region: us-east-1
-
-- **Frontend:** AWS S3 + CloudFront
-  - CloudFront Distribution: `E3P1COZJYAXZI8`
-  - S3 Bucket: `ai-chat-react-binyamseyoum-1772500915`
-  - HTTPS enabled with CloudFront default certificate
-
-**Features:**
-
-- ✅ HTTPS with CloudFront SSL
-- ✅ Gzip compression enabled
-- ✅ CDN caching (24-hour default)
-- ✅ Global edge locations
-- ✅ Automatic HTTP → HTTPS redirect
-- ✅ React Router support (404 → index.html)
 
 ### Deploy Your Own
 
@@ -299,7 +280,7 @@ Refresh page                  → All sessions still available
 - PDF text → RecursiveCharacterTextSplitter (1000 chars, 200 overlap)
 - Chunks → OpenAI embeddings (768-dim vectors)
 - Vectors stored in Pinecone with file metadata (namespace support)
-- Query → similarity search (top-4 chunks) → dynamic filtering → LLM with context → cited answer
+- Query + conversation history → similarity search (top-4 chunks) → dynamic filtering → LLM with context → cited answer
 
 **Namespace Management:**
 
@@ -343,8 +324,8 @@ ai-chat-react/
 
 ### Known Limitations
 - PDF parsing doesn't handle scanned documents (no OCR)
-- No streaming responses yet (LangChain supports it, just not wired up)
 - Single-user design (no auth or multi-tenancy)
+- localStorage limited to ~10MB (~1000 messages)
 
 ---
 
