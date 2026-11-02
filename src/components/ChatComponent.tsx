@@ -19,7 +19,7 @@ import {
 } from '@mui/icons-material';
 import { Message } from '../types';
 import { useChatContext } from '../contexts/ChatContext';
-import { sendMessageToOpenAI } from '../services/apiService';
+import { streamMessageFromOpenAI } from '../services/apiService';
 import { canMakeRequest, getTimeRemaining } from '../utils/helpers';
 
 const ChatComponent: React.FC = () => {
@@ -29,6 +29,7 @@ const ChatComponent: React.FC = () => {
   // Use session messages if available
   const chatLog = state.currentSession?.messages || [];
   const [loading, setLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
 
@@ -81,31 +82,28 @@ const ChatComponent: React.FC = () => {
       setLastRequestTime(Date.now());
       setTimeRemaining(MIN_REQUEST_INTERVAL);
 
-      // Send message to OpenAI API
-      const response = await sendMessageToOpenAI([...chatLog, userMessage]);
-
-      if (response.success) {
-        // Add assistant's response to session
-        addMessage({ role: 'assistant', content: response.data || '' });
-      } else {
-        // Show error in chat
-        addMessage({
-          role: 'assistant',
-          content: `Error: ${response.error || 'Unknown error'}`
-        });
-
-        // If rate limited, implement a longer cooldown
-        if (response.error?.includes('429')) {
-          setTimeRemaining(60000); // 1 minute cooldown after rate limit hit
+      let fullContent = '';
+      await streamMessageFromOpenAI(
+        [...chatLog, userMessage],
+        (chunk) => {
+          fullContent += chunk;
+          setStreamingContent(fullContent);
+        },
+        () => {
+          addMessage({ role: 'assistant', content: fullContent || 'No response generated.' });
+          setStreamingContent('');
+          setLoading(false);
+        },
+        (error) => {
+          addMessage({ role: 'assistant', content: `Error: ${error}` });
+          setStreamingContent('');
+          if (error.includes('429')) setTimeRemaining(60000);
+          setLoading(false);
         }
-      }
+      );
     } catch {
-      // Handle and display the error
-      addMessage({
-        role: 'assistant',
-        content: 'An error occurred while generating a response.'
-      });
-    } finally {
+      addMessage({ role: 'assistant', content: 'An error occurred while generating a response.' });
+      setStreamingContent('');
       setLoading(false);
     }
   };
@@ -135,7 +133,7 @@ const ChatComponent: React.FC = () => {
           </Typography>
         </Stack>
         <Alert severity="info" sx={{ mb: 2 }}>
-          Direct chat with <strong>GPT-3.5 Turbo</strong> via OpenAI API
+          Direct chat with <strong>GPT-4o Mini</strong> via OpenAI API
         </Alert>
 
         {timeRemaining > 0 && (
@@ -173,7 +171,7 @@ const ChatComponent: React.FC = () => {
                     Start a Conversation
                   </Typography>
                   <Typography variant="body1" color="text.secondary">
-                    Ask me anything! I'm powered by OpenAI's GPT-3.5 Turbo model.
+                    Ask me anything! I'm powered by OpenAI's GPT-4o Mini model.
                   </Typography>
                 </Box>
               </Zoom>
@@ -210,7 +208,7 @@ const ChatComponent: React.FC = () => {
                     {message.role === 'user' ? 'You' : 'AI Assistant'}
                   </Typography>
                   {message.role === 'assistant' && (
-                    <Chip label="GPT-3.5" size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                    <Chip label="GPT-4o Mini" size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
                   )}
                 </Stack>
                 <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', color: 'inherit', lineHeight: 1.6 }}>
@@ -220,7 +218,20 @@ const ChatComponent: React.FC = () => {
             </Fade>
           ))
         )}
-        {loading && (
+        {loading && streamingContent && (
+          <Fade in timeout={300}>
+            <Paper elevation={1} sx={{ p: 2.5, mb: 2, maxWidth: '80%', borderRadius: 2 }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>AI Assistant</Typography>
+                <Chip label="GPT-4o Mini" size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+              </Stack>
+              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                {streamingContent}<Box component="span" sx={{ display: 'inline-block', width: 2, height: '1em', bgcolor: 'text.primary', ml: 0.5, animation: 'blink 1s step-end infinite', '@keyframes blink': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0 } } }} />
+              </Typography>
+            </Paper>
+          </Fade>
+        )}
+        {loading && !streamingContent && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}>
             <Skeleton variant="circular" width={40} height={40} />
             <Box sx={{ flex: 1 }}>

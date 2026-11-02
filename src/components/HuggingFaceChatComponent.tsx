@@ -167,7 +167,7 @@ const HuggingFaceChatComponent: React.FC = () => {
           {connectionStatus.details && (
             <Box sx={{ mt: 1 }}>
               <Typography variant="body2" color="error">
-                Details: Error {connectionStatus.details.status} - This might indicate an issue with your token or the API.
+                Details: Error {String(connectionStatus.details.status)} - This might indicate an issue with your token or the API.
               </Typography>
               <Button 
                 size="small" 

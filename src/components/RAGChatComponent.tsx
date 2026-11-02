@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useChatContext } from '../contexts/ChatContext';
-import { Message, Citation } from '../types';
+import { Message } from '../types';
 import {
   Box,
   TextField,
@@ -26,6 +26,7 @@ import {
   Skeleton,
   Fade,
   Zoom,
+  LinearProgress,
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -52,6 +53,7 @@ export default function RAGChatComponent() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export default function RAGChatComponent() {
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -107,44 +109,70 @@ export default function RAGChatComponent() {
     setUploading(true);
     setError(null);
     setUploadSuccess(null);
+    setUploadPercent(0);
     setUploadProgress('Uploading PDF...');
 
     const formData = new FormData();
     formData.append('pdf', file);
     formData.append('namespace', selectedNamespace);
 
-    try {
-      setUploadProgress('Processing PDF...');
-      const response = await fetch(`${API_BASE_URL}/rag/upload`, {
-        method: 'POST',
-        body: formData,
-      });
+    const steps = [
+      { at: 20, label: 'Parsing PDF text...' },
+      { at: 45, label: 'Splitting into chunks...' },
+      { at: 65, label: 'Generating embeddings...' },
+      { at: 85, label: 'Storing in vector database...' },
+    ];
+    let stepIndex = 0;
 
-      setUploadProgress('Creating embeddings...');
-      const data = await response.json();
+    const xhr = new XMLHttpRequest();
 
-      if (data.success) {
-        setUploadProgress('');
-        setUploadSuccess(`✅ Successfully uploaded ${file.name} (${data.chunks} chunks from ${data.pages} pages)`);
-        loadNamespaces();
-        // Clear the file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      } else {
-        setUploadProgress('');
-        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error || 'Failed to upload PDF');
-        setError(errorMsg);
-        console.error('Upload error:', data);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 20); // upload = 0–20%
+        setUploadPercent(pct);
       }
-    } catch (err) {
+    };
+
+    xhr.upload.onload = () => {
+      // File sent; now server is processing — animate through steps
+      const interval = setInterval(() => {
+        if (stepIndex >= steps.length) { clearInterval(interval); return; }
+        setUploadPercent(steps[stepIndex].at);
+        setUploadProgress(steps[stepIndex].label);
+        stepIndex++;
+      }, 1800);
+      xhr.onloadend = () => clearInterval(interval);
+    };
+
+    xhr.onload = () => {
+      setUploadPercent(100);
       setUploadProgress('');
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(errorMsg);
-      console.error('Upload exception:', err);
-    } finally {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (data.success) {
+          setUploadSuccess(`Successfully uploaded ${file.name} (${data.chunks} chunks from ${data.pages} pages)`);
+          loadNamespaces();
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        } else {
+          const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error || 'Failed to upload PDF');
+          setError(errorMsg);
+        }
+      } catch {
+        setError('Failed to parse server response');
+      }
       setUploading(false);
-    }
+      setUploadPercent(0);
+    };
+
+    xhr.onerror = () => {
+      setUploadProgress('');
+      setError('Upload failed — could not reach the server');
+      setUploading(false);
+      setUploadPercent(0);
+    };
+
+    xhr.open('POST', `${API_BASE_URL}/rag/upload`);
+    xhr.send(formData);
   };
 
   const handleSendMessage = async () => {
@@ -171,6 +199,7 @@ export default function RAGChatComponent() {
           question: userMessage.content,
           namespace: selectedNamespace,
           topK: 4,
+          chatHistory: messages.slice(-8).map(m => ({ role: m.role, content: m.content })),
         }),
       });
 
@@ -377,10 +406,16 @@ export default function RAGChatComponent() {
         </Stack>
 
         {/* Upload Progress */}
-        {uploadProgress && (
-          <Alert severity="info" sx={{ mt: 2 }} icon={<CircularProgress size={20} />}>
-            {uploadProgress}
-          </Alert>
+        {uploading && (
+          <Box sx={{ mt: 2 }}>
+            <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                {uploadProgress || 'Uploading PDF...'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">{uploadPercent}%</Typography>
+            </Stack>
+            <LinearProgress variant="determinate" value={uploadPercent} sx={{ borderRadius: 1, height: 6 }} />
+          </Box>
         )}
 
         {/* Success/Error messages */}

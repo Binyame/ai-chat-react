@@ -76,7 +76,7 @@ app.get('/health', (req, res) => {
 // OpenAI API proxy
 app.post('/api/openai/chat', async (req, res) => {
   try {
-    const { messages, model = 'gpt-3.5-turbo', max_tokens = 1000, temperature = 0.7 } = req.body;
+    const { messages, model = 'gpt-4o-mini', max_tokens = 1000, temperature = 0.7 } = req.body;
 
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({
@@ -125,27 +125,75 @@ app.post('/api/openai/chat', async (req, res) => {
       const errorData = error.response.data;
       
       if (status === 429) {
-        return res.status(429).json({
-          success: false,
-          error: 'Rate limit exceeded. Please try again later.'
-        });
+        return res.status(429).json({ success: false, error: 'OpenAI rate limit hit. Wait a moment and try again, or upgrade your OpenAI plan.' });
       } else if (status === 401) {
-        return res.status(500).json({
-          success: false,
-          error: 'Invalid API key configuration'
-        });
+        return res.status(500).json({ success: false, error: 'OpenAI API key is invalid or expired. Check OPENAI_API_KEY in server/.env.' });
+      } else if (status === 503) {
+        return res.status(503).json({ success: false, error: 'OpenAI service is temporarily unavailable. Try again in a few seconds.' });
       } else {
-        return res.status(500).json({
-          success: false,
-          error: errorData?.error?.message || `API Error: ${status}`
-        });
+        return res.status(500).json({ success: false, error: errorData?.error?.message || `OpenAI API error (${status})` });
       }
     }
 
-    res.status(500).json({
-      success: false,
-      error: 'Failed to communicate with OpenAI API'
+    if (error.code === 'ECONNABORTED') {
+      return res.status(504).json({ success: false, error: 'Request to OpenAI timed out. Try a shorter message or try again.' });
+    }
+
+    res.status(500).json({ success: false, error: 'Could not reach OpenAI API. Check your internet connection.' });
+  }
+});
+
+// OpenAI streaming endpoint
+app.post('/api/openai/chat/stream', async (req, res) => {
+  try {
+    const { messages, model = 'gpt-4o-mini', max_tokens = 1000, temperature = 0.7 } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ success: false, error: 'OpenAI API key not configured on server' });
+    }
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ success: false, error: 'Messages array is required' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      { model, messages, max_tokens, temperature, stream: true },
+      {
+        headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+        responseType: 'stream',
+        timeout: 60000
+      }
+    );
+
+    let buffer = '';
+    response.data.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') { res.write('data: [DONE]\n\n'); res.end(); return; }
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          } catch {}
+        }
+      }
     });
+    response.data.on('end', () => { res.write('data: [DONE]\n\n'); res.end(); });
+    response.data.on('error', () => { res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`); res.end(); });
+    req.on('close', () => response.data.destroy());
+
+  } catch (error) {
+    console.error('OpenAI Streaming Error:', error.response?.data || error.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: error.message || 'Streaming failed' });
   }
 });
 
@@ -343,17 +391,21 @@ app.post('/api/gemini/chat', async (req, res) => {
       const errorData = error.response.data;
       
       if (status === 400 && errorData?.error?.message?.includes('API key')) {
-        return res.status(500).json({
-          success: false,
-          error: 'Invalid Gemini API key configuration'
-        });
+        return res.status(500).json({ success: false, error: 'Gemini API key is invalid. Check GEMINI_API_KEY in server/.env.' });
+      } else if (status === 429) {
+        return res.status(429).json({ success: false, error: 'Gemini rate limit hit. Wait a moment and try again.' });
+      } else if (status === 404) {
+        return res.status(500).json({ success: false, error: `Gemini model not found. The model may have been deprecated.` });
+      } else {
+        return res.status(500).json({ success: false, error: errorData?.error?.message || `Gemini API error (${status})` });
       }
     }
 
-    res.status(500).json({
-      success: false,
-      error: 'Failed to communicate with Gemini API'
-    });
+    if (error.code === 'ECONNABORTED') {
+      return res.status(504).json({ success: false, error: 'Request to Gemini timed out. Try a shorter message or try again.' });
+    }
+
+    res.status(500).json({ success: false, error: 'Could not reach Gemini API. Check your internet connection.' });
   }
 });
 
@@ -369,13 +421,13 @@ app.post('/api/rag/upload', upload.single('pdf'), async (req, res) => {
       });
     }
 
-    if (!process.env.GEMINI_API_KEY || !process.env.PINECONE_API_KEY) {
-      // Clean up uploaded file
+    if (!process.env.OPENAI_API_KEY) {
       fs.unlinkSync(req.file.path);
-      return res.status(500).json({
-        success: false,
-        error: 'Gemini and Pinecone API keys are required for RAG functionality'
-      });
+      return res.status(500).json({ success: false, error: 'OPENAI_API_KEY is not configured on the server (required for embeddings)' });
+    }
+    if (!process.env.PINECONE_API_KEY) {
+      fs.unlinkSync(req.file.path);
+      return res.status(500).json({ success: false, error: 'PINECONE_API_KEY is not configured on the server' });
     }
 
     const namespace = req.body.namespace || 'default';
@@ -413,10 +465,63 @@ app.post('/api/rag/upload', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// Gemini streaming endpoint
+app.post('/api/gemini/chat/stream', async (req, res) => {
+  try {
+    const { message, model = 'gemini-2.0-flash' } = req.body;
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ success: false, error: 'Gemini API key not configured on server' });
+    }
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`,
+      {
+        contents: [{ parts: [{ text: message }] }],
+        generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 1024 }
+      },
+      { headers: { 'Content-Type': 'application/json' }, responseType: 'stream', timeout: 60000 }
+    );
+
+    let buffer = '';
+    response.data.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') { res.write('data: [DONE]\n\n'); res.end(); return; }
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (content) res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          } catch {}
+        }
+      }
+    });
+    response.data.on('end', () => { res.write('data: [DONE]\n\n'); res.end(); });
+    response.data.on('error', () => { res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`); res.end(); });
+    req.on('close', () => response.data.destroy());
+
+  } catch (error) {
+    console.error('Gemini Streaming Error:', error.response?.data || error.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: error.message || 'Streaming failed' });
+  }
+});
+
 // Query RAG with citations
 app.post('/api/rag/query', async (req, res) => {
   try {
-    const { question, namespace = 'default', topK = 4 } = req.body;
+    const { question, namespace = 'default', topK = 4, chatHistory = [] } = req.body;
 
     if (!question) {
       return res.status(400).json({
@@ -425,14 +530,14 @@ app.post('/api/rag/query', async (req, res) => {
       });
     }
 
-    if (!process.env.GEMINI_API_KEY || !process.env.PINECONE_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: 'Gemini and Pinecone API keys are required for RAG functionality'
-      });
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ success: false, error: 'OPENAI_API_KEY is not configured on the server (required for embeddings)' });
+    }
+    if (!process.env.PINECONE_API_KEY) {
+      return res.status(500).json({ success: false, error: 'PINECONE_API_KEY is not configured on the server' });
     }
 
-    const result = await ragService.query(question, namespace, topK);
+    const result = await ragService.query(question, namespace, topK, chatHistory);
 
     res.json(result);
 

@@ -31,7 +31,7 @@ const MockChatComponent: React.FC = () => {
 
       if (response.success) {
         // Update chat log with the assistant's response
-        setChatLog(prev => [...prev, { role: 'assistant', content: response.data }]);
+        setChatLog(prev => [...prev, { role: 'assistant', content: response.data ?? '' }]);
       } else {
         // Show error in chat
         setChatLog(prev => [...prev, { 

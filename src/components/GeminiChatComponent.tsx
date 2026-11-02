@@ -20,8 +20,8 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
-import { Message } from '../types';
 import { useChatContext } from '../contexts/ChatContext';
+import { streamMessageFromGemini } from '../services/apiService';
 
 const GeminiChatComponent: React.FC = () => {
   const { state, addMessage, loadOrCreateSessionForProvider } = useChatContext();
@@ -30,6 +30,7 @@ const GeminiChatComponent: React.FC = () => {
   // Use session messages if available
   const chatLog = state.currentSession?.messages || [];
   const [loading, setLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
 
@@ -104,86 +105,25 @@ const GeminiChatComponent: React.FC = () => {
     // Add user message to session
     addMessage({ role: 'user', content: message });
 
-    try {
-      // Make API call to Gemini with the recommended model (using v1 stable endpoint)
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${apiKey}`,
-        {
-          contents: [
-            {
-              parts: [
-                {
-                  text: message
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 1024,
-          }
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      console.log('Gemini API Response:', response.data);
-      
-      // Extract the assistant's response
-      let assistantMessage = 'Sorry, I couldn\'t generate a response.';
-      
-      if (response.data.candidates && 
-          response.data.candidates.length > 0 && 
-          response.data.candidates[0].content &&
-          response.data.candidates[0].content.parts &&
-          response.data.candidates[0].content.parts.length > 0) {
-        assistantMessage = response.data.candidates[0].content.parts[0].text || assistantMessage;
+    let fullContent = '';
+    await streamMessageFromGemini(
+      message,
+      (chunk) => {
+        fullContent += chunk;
+        setStreamingContent(fullContent);
+      },
+      () => {
+        addMessage({ role: 'assistant', content: fullContent || 'No response generated.' });
+        setStreamingContent('');
+        setLoading(false);
+      },
+      (err) => {
+        setError(err);
+        addMessage({ role: 'assistant', content: `Error: ${err}` });
+        setStreamingContent('');
+        setLoading(false);
       }
-      
-      // Add assistant's response to chat log
-      // Add assistant message to session
-      addMessage({ role: 'assistant', content: assistantMessage });
-    } catch (error) {
-      console.error('API Error:', error);
-      
-      // Display error message
-      if (axios.isAxiosError(error) && error.response) {
-        const statusCode = error.response.status;
-        const errorData = error.response.data;
-        
-        let errorMessage = `Error ${statusCode}`;
-        
-        // Check for specific Gemini API error messages
-        if (errorData && errorData.error && errorData.error.message) {
-          errorMessage = errorData.error.message;
-          
-          // Handle invalid API key specifically
-          if (statusCode === 400 && errorMessage.includes('API key')) {
-            errorMessage = 'Invalid API key. Please check your Gemini API key in the .env file.';
-            setApiKeyValid(false);
-          }
-          
-          // Handle model deprecation/availability issues
-          if (errorMessage.includes('deprecated') || errorMessage.includes('not found')) {
-            errorMessage = `Model error: ${errorMessage}. Please update the component to use a different model.`;
-          }
-        }
-        
-        setError(errorMessage);
-        addMessage({ role: 'assistant', content: `Error: ${errorMessage}` });
-      } else {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-        setError(`Error: ${errorMessage}`);
-        addMessage({ role: 'assistant', content: `Error: ${errorMessage}` });
-      }
-    } finally {
-      setLoading(false);
-    }
+    );
   };
 
   const handleSend = () => {
@@ -366,7 +306,19 @@ const GeminiChatComponent: React.FC = () => {
             </Fade>
           ))
         )}
-        {loading && (
+        {loading && streamingContent && (
+          <Fade in timeout={300}>
+            <Paper elevation={1} sx={{ p: 2.5, mb: 2, maxWidth: '80%', borderRadius: 2 }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Gemini</Typography>
+                <Chip label="Gemini 2.0" size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+              </Stack>
+              <MessageContent content={streamingContent} role="assistant" />
+              <Box component="span" sx={{ display: 'inline-block', width: 2, height: '1em', bgcolor: 'text.primary', ml: 0.5, animation: 'blink 1s step-end infinite', '@keyframes blink': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0 } } }} />
+            </Paper>
+          </Fade>
+        )}
+        {loading && !streamingContent && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}>
             <Skeleton variant="circular" width={40} height={40} />
             <Box sx={{ flex: 1 }}>

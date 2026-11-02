@@ -192,7 +192,7 @@ export function setLogLevel(level: LogLevel): void {
 const startTimes = new Map<string, number>();
 
 export function perfStart(operation: string): void {
-  startTimes.set(operation, performance.now());
+  startTimes.set(operation, globalThis.performance.now());
   debug(`Started: ${operation}`, undefined, 'PERF');
 }
 
@@ -203,7 +203,7 @@ export function perfEnd(operation: string, data?: unknown): number {
     return 0;
   }
 
-  const duration = performance.now() - startTime;
+  const duration = globalThis.performance.now() - startTime;
   startTimes.delete(operation);
 
   performance(operation, duration, data);

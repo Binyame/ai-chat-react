@@ -72,7 +72,7 @@ async function initialize() {
     console.log('🔧 Step 5: Initializing OpenAI LLM...');
     llm = new ChatOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-      modelName: 'gpt-3.5-turbo',
+      modelName: 'gpt-4o-mini',
       temperature: 0.7,
     });
     console.log('✅ OpenAI LLM initialized');
@@ -120,10 +120,20 @@ async function ingestPDF(filePath, metadata = {}) {
       },
     }));
 
+    // Delete any existing vectors for this file to avoid duplicates on re-upload
+    const ns = metadata.namespace || 'default';
+    const originalName = metadata.originalName || fileName;
+    try {
+      await index.namespace(ns).deleteMany({ filter: { originalName: { $eq: originalName } } });
+      console.log(`🗑️  Cleared existing vectors for "${originalName}" in namespace "${ns}"`);
+    } catch {
+      console.log(`ℹ️  No prior vectors found for "${originalName}" (or filter-delete not supported)`);
+    }
+
     // Store in Pinecone
     await PineconeStore.fromDocuments(enrichedDocs, embeddings, {
       pineconeIndex: index,
-      namespace: metadata.namespace || 'default',
+      namespace: ns,
     });
 
     console.log(`✅ Successfully ingested PDF: ${fileName}`);
@@ -140,7 +150,7 @@ async function ingestPDF(filePath, metadata = {}) {
   }
 }
 
-async function query(question, namespace = 'default', topK = 4) {
+async function query(question, namespace = 'default', topK = 4, chatHistory = []) {
   await initialize();
 
   try {
@@ -220,6 +230,12 @@ async function query(question, namespace = 'default', topK = 4) {
       relevance: score.toFixed(2),
     }));
 
+    // Build conversation history section (last 4 exchanges max)
+    const recentHistory = chatHistory.slice(-8);
+    const historySection = recentHistory.length > 0
+      ? `\nConversation so far:\n${recentHistory.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n')}\n`
+      : '';
+
     // Generate answer with strict grounding instructions
     const prompt = `You are a document Q&A assistant. Your job is to answer questions ONLY using information from the provided context.
 
@@ -228,11 +244,12 @@ CRITICAL RULES:
 2. NEVER make up or infer information that is not explicitly stated in the context.
 3. ALWAYS cite your sources using [1], [2], etc. for every claim you make.
 4. If only partial information is available, state what you found and what is missing.
-
+5. Use the conversation history below to understand follow-up questions and resolve pronouns (e.g. "it", "that", "the previous answer").
+${historySection}
 Context from documents:
 ${context}
 
-Question: ${question}
+Current question: ${question}
 
 Answer based ONLY on the context above. If the answer is not in the context, say "This information is not found in the uploaded documents."`;
 
